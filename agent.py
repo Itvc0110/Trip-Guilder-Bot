@@ -53,6 +53,9 @@ class DiChoiAgent:
         self.conversation_id = self.memory_path.stem
         self.created_at = now_iso()
         self.memory_summary = ""
+        self.hangout_plan: list[dict[str, Any]] = []
+        self.last_route: dict[str, Any] | None = None
+        self.last_recommendations: list[dict[str, Any]] = []
         self.history: list[ConversationTurn] = []
         self.transcript: list[ConversationTurn] = []
         self._load_memory()
@@ -112,6 +115,12 @@ class DiChoiAgent:
             else:
                 final_answer = self._apply_review(draft_answer, review, revision_count)
 
+        self.last_route = route
+        self.last_recommendations = []
+        for finding in tool_findings:
+            if finding.get("tool_name") == "filter_reviews":
+                self.last_recommendations = finding.get("ranked_places") or []
+                break
         self._remember(user_request, final_answer)
         return AgentResult(route, tool_findings, draft_answer, review, final_answer, self.memory_summary)
 
@@ -433,6 +442,9 @@ Trả về JSON với các trường:
         self.conversation_id = str(data.get("conversation_id") or self.memory_path.stem)
         self.created_at = str(data.get("created_at") or self.created_at)
         self.memory_summary = str(data.get("memory_summary") or "")
+        self.hangout_plan = data.get("hangout_plan") or []
+        self.last_route = data.get("last_route")
+        self.last_recommendations = data.get("last_recommendations") or []
         transcript_items = data.get("transcript")
         recent_items = data.get("recent_turns")
         if isinstance(transcript_items, list):
@@ -449,6 +461,9 @@ Trả về JSON với các trường:
             "updated_at": now_iso(),
             "conversation_window": self.settings.conversation_window,
             "memory_summary": self.memory_summary,
+            "hangout_plan": self.hangout_plan,
+            "last_route": self.last_route,
+            "last_recommendations": self.last_recommendations,
             "recent_turns": [turn_to_dict(turn) for turn in self.history],
             "transcript": [turn_to_dict(turn) for turn in self.transcript],
         }
@@ -457,6 +472,18 @@ Trả về JSON với các trường:
             json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def add_to_plan(self, location: dict[str, Any]) -> None:
+        """Thêm một địa điểm vào kế hoạch đi chơi (HangOut Plan)."""
+        # Tránh trùng lặp
+        if not any(loc.get("title") == location.get("title") for loc in self.hangout_plan):
+            self.hangout_plan.append(location)
+            self._save_memory()
+
+    def remove_from_plan(self, title: str) -> None:
+        """Xóa địa điểm khỏi kế hoạch đi chơi theo tên."""
+        self.hangout_plan = [loc for loc in self.hangout_plan if loc.get("title") != title]
+        self._save_memory()
 
     def _maybe_rename_auto_memory(self, user_request: str) -> None:
         if not self._auto_named_memory or len(self.transcript) != 1:

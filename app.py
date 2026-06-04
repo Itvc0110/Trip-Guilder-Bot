@@ -55,8 +55,10 @@ if "agent" not in st.session_state:
     st.session_state.agent = DiChoiAgent(st.session_state.settings, st.session_state.conversation_id)
     st.session_state.conversation_id = st.session_state.agent.conversation_id
 
-if "recommendations" not in st.session_state:
-    st.session_state.recommendations = []
+def submit_user_message(query_text: str):
+    if query_text and query_text.strip():
+        st.session_state.agent.run(query_text)
+        st.rerun()
 
 # Sidebar panel
 with st.sidebar:
@@ -80,12 +82,10 @@ with st.sidebar:
             st.session_state.conversation_id = None
             st.session_state.agent = DiChoiAgent(st.session_state.settings, None)
             st.session_state.conversation_id = st.session_state.agent.conversation_id
-            st.session_state.recommendations = []
             st.rerun()
     elif selected_option != "Bắt đầu mới" and selected_option != st.session_state.conversation_id:
         st.session_state.conversation_id = selected_option
         st.session_state.agent = DiChoiAgent(st.session_state.settings, selected_option)
-        st.session_state.recommendations = []
         st.rerun()
 
     st.write("---")
@@ -193,32 +193,51 @@ for turn in agent.transcript:
 # Toggle flow choice "Bạn muốn đi tiếp không?"
 go_next = st.checkbox("Bạn muốn tiếp tục tìm và thêm địa điểm khác cho kế hoạch đi chơi không?", value=True)
 
+# Quick Reply Panel if Agent needs clarification
+if go_next and agent.last_route and agent.last_route.get("decision") == "clarify":
+    missing_info = agent.last_route.get("missing_info", [])
+    if missing_info:
+        primary_missing = missing_info[0]
+        
+        # Map missing info to user options
+        if "khu vực" in primary_missing.lower() or "thành phố" in primary_missing.lower() or "ở đâu" in primary_missing.lower():
+            title = "Chọn khu vực bạn muốn đi chơi:"
+            options = ["Tây Hồ, Hà Nội", "Hoàn Kiếm, Hà Nội", "Cầu Giấy, Hà Nội"]
+        elif "trải nghiệm" in primary_missing.lower() or "kiểu" in primary_missing.lower():
+            title = "Chọn kiểu trải nghiệm bạn muốn:"
+            options = ["Cafe chill & sống ảo", "Ăn uống ẩm thực", "Vui chơi & hoạt động nhóm"]
+        else:
+            title = f"Vui lòng chọn một lựa chọn nhanh hoặc nhập tự chọn ở khung chat:"
+            options = ["Tây Hồ, Hà Nội", "Cafe & Ăn uống", "Hoạt động ngoài trời"]
+            
+        st.markdown(f"""
+        <div style="background-color: #f0f4f8; padding: 15px; border-radius: 8px; border-left: 5px solid #2b5c8f; margin-bottom: 15px;">
+            <p style="margin: 0; font-weight: bold; color: #2b5c8f;">💡 Trả lời nhanh cho Bot:</p>
+            <p style="margin: 5px 0 10px 0; font-size: 0.95em;">Bot đang thiếu thông tin: <b>{primary_missing}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write(f"*{title}*")
+        
+        cols = st.columns(3)
+        for idx, opt in enumerate(options):
+            with cols[idx]:
+                if st.button(opt, key=f"quick_reply_{idx}", use_container_width=True):
+                    submit_user_message(opt)
+        st.write("---")
+
 # Main chat input block
 if go_next:
-    user_query = st.chat_input("Nhập yêu cầu tìm quán cafe, chỗ ăn uống hay vui chơi...")
+    user_query = st.chat_input("Nhập yêu cầu tìm quán cafe, chỗ ăn uống hay vui chơi, hoặc nhập câu trả lời của bạn...")
     if user_query:
-        with st.chat_message("user"):
-            st.write(user_query)
-            
-        with st.spinner("DiChoiBot đang tính toán lộ trình và đọc đánh giá..."):
-            result = agent.run(user_query)
-            
-            # Find filter_reviews ranked places in latest tool findings
-            st.session_state.recommendations = []
-            for finding in result.tool_findings:
-                if finding.get("tool_name") == "filter_reviews":
-                    st.session_state.recommendations = finding.get("ranked_places") or []
-                    break
-                    
-        st.rerun()
+        submit_user_message(user_query)
 else:
     st.success("🎉 Bạn đã quyết định chốt lịch trình này! Hãy tải lịch (.ics) từ sidebar hoặc xem sơ đồ bên dưới.")
 
 # Display recommended locations as interactive cards (if any are available)
-if st.session_state.recommendations and go_next:
+if agent.last_recommendations and go_next:
     st.subheader("📍 Địa điểm được đề xuất dựa trên đánh giá:")
     
-    for idx, place in enumerate(st.session_state.recommendations[:5]):
+    for idx, place in enumerate(agent.last_recommendations[:5]):
         with st.container():
             st.markdown(f"""
             <div class="recommendation-card">
