@@ -85,6 +85,9 @@ def _process_place(user_request: str, item: dict[str, Any]) -> dict[str, Any]:
         "recent_reviews": recent_reviews,      # 2 review mới nhất
         "general_comment": general_comment,    # Nhận xét LLM / fallback
         "data_id": place.get("data_id"),
+        "gps": place.get("gps"),                # Tọa độ định vị
+        "type": place.get("type"),              # Thể loại địa điểm
+        "price": place.get("price"),            # Mức giá
     }
 
 

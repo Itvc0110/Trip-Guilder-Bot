@@ -4,6 +4,14 @@ DiChoiBot is a specialized Python chatbot agent designed to recommend short-term
 
 ---
 
+> [!IMPORTANT]
+> **Instructions for AI Agents (Maintenance & Update Rules)**
+> - **No Complete Overwrites**: Under no circumstances should this document be completely overwritten or recreated from scratch. Only perform targeted, incremental updates.
+> - **Tool & Test Case Format Integrity**: The documented tool output schemas and test case formats must only be updated if the actual programmatic output formats or schemas change in the codebase.
+> - **Execution Result Updates**: Only update a specific test case execution result if its run results have actually changed. If a test case is removed or is no longer run, mark its heading or status as `[DEPRECATED]` instead of deleting its section.
+
+---
+
 ## 1. Active Tool Chain & Legacy Tools
 
 The active tool chain consists of three sequential tools:

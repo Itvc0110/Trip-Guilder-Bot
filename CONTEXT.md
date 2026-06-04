@@ -1,4 +1,4 @@
-# Context: Trip-Guilder-Bot (AI Weekend Planner cho Cặp đôi)
+# Context: Trip-Guilder-Bot (AI Friend Hangout Planner)
 
 Tài liệu này đóng vai trò làm **Bản Hướng dẫn Chất lượng & Lập trình (Quality Context & Developer Guide)** cho **CODEX** (hoặc bất kỳ AI agent nào). Tài liệu phác thảo triết lý xây dựng ứng dụng AI trong môi trường không chắc chắn, thông số sản phẩm dành cho **Trip-Guilder-Bot**, kiến trúc hệ thống, 4 UX paths, và các cột mốc triển khai (milestones).
 
@@ -9,36 +9,56 @@ Tài liệu này đóng vai trò làm **Bản Hướng dẫn Chất lượng & L
 Ứng dụng AI khác với phần mềm truyền thống ở tính **xác suất** (probabilistic) thay vì quyết định luận (deterministic). Phát triển sản phẩm AI thực chất là **quản lý rủi ro, phân luồng lỗi (error routing), và tạo vòng lặp phản hồi (feedback loops)**.
 
 ### 1.1 Ba tầng không chắc chắn (Three Layers of Uncertainty)
-1. **Input Uncertainty**: Người dùng nhập các yêu cầu mơ hồ hoặc thiếu thông tin (ví dụ: *"hẹn hò cuối tuần"* - thiếu vibe, ngân sách, phương tiện, thời gian).
+1. **Input Uncertainty**: Người dùng nhập các yêu cầu mơ hồ hoặc thiếu thông tin (ví dụ: *"đi chơi cuối tuần"* - thiếu vibe, số lượng bạn bè, ngân sách, phương tiện, thời gian).
 2. **Process Uncertainty**: Agent diễn dịch sai yêu cầu, gọi công cụ (tool) gặp lỗi, hoặc bị giới hạn ngữ cảnh (context window).
-3. **Output Uncertainty**: Mô hình bị ảo ảnh (hallucination), gợi ý địa điểm đã đóng cửa, hoặc đề xuất quán quá đông đúc làm hỏng không khí hẹn hò riêng tư.
+3. **Output Uncertainty**: Mô hình bị ảo ảnh (hallucination), gợi ý địa điểm đã đóng cửa, hoặc đề xuất quán quá đông đúc làm hỏng không khí tụ tập của nhóm bạn.
 
 ### 1.2 Vòng đời xử lý lỗi: Detect → Route → Recover → Learn
 *   **Detect**: Phát hiện đầu vào có độ tự tin thấp (vague prompt) hoặc lỗi thực thi công cụ (API error, database empty).
 *   **Route**: Chuyển hướng xử lý sang luồng an toàn (Clarification prompt, fallback template, hiển thị UI lựa chọn thay thế).
 *   **Recover**: Cung cấp công cụ trực quan để người dùng khôi phục và chỉnh sửa (kéo thả thay đổi giờ, nút đổi địa điểm cùng vibe).
-*   **Learn**: Thu thập hành động chỉnh sửa của người dùng thành tín hiệu học máy (ghi log console dạng JSON) để liên tục cải tiến hệ thống prompt và seed database.
+*   **Learn**: Ghi nhận log chỉnh sửa của người dùng thành tín hiệu học máy (JSON log console) để cải tiến hệ thống.
 
 ### 1.3 Automation vs. Augmentation
 *   **Augmentation (Selected Path)**: AI đóng vai trò đề xuất lịch trình nháp. Người dùng là người duyệt, chỉnh sửa và quyết định cuối cùng.
-    *   *Tại sao?* Buổi hẹn hò của cặp đôi mang tính riêng tư cao. Một gợi ý không hợp vibe hoặc một quán quá đông đúc có thể phá hỏng cảm xúc cả ngày. Chi phí để người dùng chỉnh sửa/bác bỏ gợi ý của AI là cực kỳ thấp nếu UI/UX hỗ trợ kéo thả tiện lợi.
-*   **Agency Progression**: Bắt đầu bằng Augmentation (V1 Suggestion & V2 Copilot) trước khi nâng cấp lên V3 (Automation - tự động đặt chỗ) khi đã thu thập đủ dữ liệu tương tác thực tế.
+    *   *Tại sao?* Cuộc tụ họp của nhóm bạn mang tính sở thích và tính chất nhóm cao. Một gợi ý không hợp vibe có thể làm hỏng buổi đi chơi. Chi phí để người dùng duyệt/chỉnh sửa là cực kỳ thấp.
+*   **Agency Progression**: Bắt đầu bằng Augmentation (V1 Suggestion & V2 Copilot) trước khi nâng cấp lên V3 (Automation) khi đã thu thập đủ dữ liệu tương tác thực tế.
 
 ---
 
-## 🛠️ 2. Product Specification & Build Slice (AI Weekend Planner)
+## 🗣️ 2. Domain Glossary (Language)
 
-### 2.1 Target User & Pain Statement
-*   **Target User**: Các cặp đôi tại Hà Nội (đang hẹn hò hoặc đã kết hôn, không dắt theo con nhỏ) đang lên kế hoạch đi chơi/hẹn hò cuối tuần.
+**HangOut Plan**:
+Lịch trình và danh sách các địa điểm được duyệt/chọn cho chuyến đi chơi của nhóm bạn.
+*Avoid*: Date plan, weekend itinerary, couples schedule
+
+**Interested Location**:
+Một địa điểm cụ thể được đề xuất hoặc do người dùng thêm vào HangOut Plan để cân nhắc lựa chọn.
+*Avoid*: Spot, date spot, choice
+
+**HangOut Plan Framework**:
+Cơ cấu thông tin được dùng để theo dõi ý định (Intent) và các ràng buộc của nhóm bạn (như số lượng người, loại trải nghiệm, vibe, khu vực), đồng thời lưu trữ thông tin tọa độ GPS và thời gian (timing) của các địa điểm đã chọn trong HangOut Plan để áp đặt ràng buộc khoảng cách (proximity) và trình tự thời gian cho các lượt tìm kiếm địa điểm tiếp theo.
+*Avoid*: Input model, request schema
+
+**Friend Group**:
+Nhóm người (từ 3 người trở lên) tham gia chuyến đi chơi cùng nhau.
+*Avoid*: Couple, date partners
+
+---
+
+## 🛠️ 3. Product Specification & Build Slice (AI Friend Hangout Planner)
+
+### 3.1 Target User & Pain Statement
+*   **Target User**: Nhóm bạn tại Hà Nội/Hồ Chí Minh đang muốn lên kế hoạch đi chơi/tụ họp cuối tuần.
 *   **Pain Statement (Grounded in Evidence)**:
-    *   Google AI Overview trả về văn bản lịch trình tĩnh và cực kỳ sơ sài, không có bản đồ di chuyển, không có lịch nhắc nhở, và không quan tâm đến vibe hẹn hò hay độ đông đúc của quán.
-    *   Người dùng phải liên tục nhảy qua lại giữa Google Search, Maps, Facebook/Tiktok review, Calendar và các app nhắn tin để bàn bạc và chốt lịch.
-    *   Cặp đôi sợ nhất cảnh đến nơi lãng mạn nhưng quán quá đông phải xếp hàng chờ đợi lâu.
+    *   Google AI Overview trả về văn bản lịch trình tĩnh và sơ sài, không Maps, không Calendar, không hỏi lại sở thích của cả nhóm.
+    *   Người dùng phải liên tục nhảy qua lại giữa nhiều app (Maps, Chat, Tiktok, Search) để bàn bạc và thống nhất địa điểm cho nhóm.
+    *   Nhóm bạn sợ nhất cảnh đến nơi đông đúc, hết bàn hoặc không phù hợp với vibe của cả nhóm (ví dụ: nhóm muốn nói chuyện nhưng quán quá ồn).
 *   **Analog Pattern (Inspiration)**: *Stippl AI Travel Planner* (chuyển đổi text thành timeline trực quan, kéo thả reorder, đồng bộ maps & calendar).
 
-### 2.2 The Build Slice (Hackathon Scope)
+### 3.2 The Build Slice (Hackathon Scope)
 MVP prototype tập trung vào vòng lặp khép kín:
-> **User nhập tiêu chí hẹn hò** $\rightarrow$ **ReAct Agent (DeepSeek-v4-flash) gọi Tools tạo timeline chi tiết kèm chỉ số độ đông đúc (crowd level)** $\rightarrow$ **Bản đồ tương tác hiển thị markers vị trí** $\rightarrow$ **User kéo thả để đổi giờ hoặc xóa/đổi điểm** $\rightarrow$ **Xuất lịch hẹn hò (.ics)** $\rightarrow$ **Hệ thống in event log JSON ra console**.
+> **AI đọc HangOut Plan Framework** $\rightarrow$ **Hỏi đáp trích xuất ý định của User (Lưu lịch sử hội thoại)** $\rightarrow$ **Chạy Location Rating pipeline (search_places ➔ search_reviews ➔ filter_reviews)** $\rightarrow$ **User duyệt & thêm các Interested Locations** ➔ **Hỏi "Bạn muốn đi tiếp không?"** ➔ **Save to HangOut Plan & Lặp lại**.
 
 ---
 
