@@ -1,370 +1,371 @@
-import os
+from __future__ import annotations
+
+import atexit
+import datetime as dt
+import html
 import json
-import datetime
-import uuid
+import urllib.parse
 from pathlib import Path
+from typing import Any
+
 import pandas as pd
 import streamlit as st
 
-# Import project files
+from agent import DiChoiAgent
 from config import load_settings
-from agent import DiChoiAgent, ConversationTurn, CONVERSATIONS_DIR
 
-# Set Page Config
+
+SESSION_FILES: set[str] = set()
+
+
+@atexit.register
+def cleanup_session_files() -> None:
+    """Delete only ephemeral Streamlit session files created by this process."""
+    for file_name in list(SESSION_FILES):
+        path = Path(file_name)
+        try:
+            if path.name.endswith("_session.json") and path.exists():
+                path.unlink()
+        except OSError:
+            pass
+
+
 st.set_page_config(
-    page_title="DiChoiBot - AI Friend Hangout Planner",
-    page_icon="🗺️",
-    layout="wide"
+    page_title="DiChoiBot",
+    page_icon="🧭",
+    layout="wide",
 )
 
-# Custom premium styling
-st.markdown("""
-<style>
-    .reportview-container {
-        background: #f0f2f6;
-    }
-    .stChatInputContainer {
-        padding-bottom: 20px;
-    }
-    .recommendation-card {
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        border-left: 5px solid #ff4b4b;
-        margin-bottom: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .review-box {
-        background-color: #f9f9f9;
-        padding: 8px;
-        border-radius: 5px;
-        margin-top: 5px;
-        font-size: 0.9em;
-    }
-</style>
-""", unsafe_allow_html=True)
 
-# Initialize Session State
-if "settings" not in st.session_state:
-    st.session_state.settings = load_settings()
+st.markdown(
+    """
+    <style>
+        .main .block-container { padding-top: 1.25rem; max-width: 1400px; }
+        .small-muted { color: #667085; font-size: 0.9rem; }
+        .recommendation-card {
+            border: 1px solid #e4e7ec;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin: 10px 0;
+            background: #ffffff;
+        }
+        .recommendation-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            margin-bottom: 4px;
+        }
+        .metric-row {
+            color: #475467;
+            font-size: 0.92rem;
+            margin: 2px 0 8px 0;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-if "conversation_id" not in st.session_state:
-    st.session_state.conversation_id = None
 
-if "agent" not in st.session_state:
-    st.session_state.agent = DiChoiAgent(st.session_state.settings, st.session_state.conversation_id)
-    st.session_state.conversation_id = st.session_state.agent.conversation_id
+def init_session() -> None:
+    if "settings" not in st.session_state:
+        st.session_state.settings = load_settings()
+    if "agent" not in st.session_state:
+        st.session_state.agent = DiChoiAgent(st.session_state.settings)
+        SESSION_FILES.add(str(st.session_state.agent.memory_path))
+    if "last_result_json" not in st.session_state:
+        st.session_state.last_result_json = None
 
-def submit_user_message(query_text: str):
-    if query_text and query_text.strip():
-        st.session_state.agent.run(query_text)
-        st.rerun()
 
-# Sidebar panel
-with st.sidebar:
-    st.title("🗺️ HangOut Control")
-    st.write("---")
+def reset_session() -> None:
+    if "agent" in st.session_state:
+        st.session_state.agent.delete_session_memory()
+    st.session_state.agent = DiChoiAgent(st.session_state.settings)
+    SESSION_FILES.add(str(st.session_state.agent.memory_path))
+    st.session_state.last_result_json = None
+    st.rerun()
 
-    # Load/Resume Conversation
-    st.subheader("Hội thoại")
-    CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
-    saved_files = sorted(CONVERSATIONS_DIR.glob("*.json"), reverse=True)
-    file_options = ["Bắt đầu mới"] + [f.stem for f in saved_files]
-    
-    selected_option = st.selectbox(
-        "Chọn hội thoại cũ:",
-        options=file_options,
-        index=0 if st.session_state.conversation_id not in [f.stem for f in saved_files] else file_options.index(st.session_state.conversation_id)
+
+def submit_user_message(message: str) -> None:
+    message = message.strip()
+    if not message:
+        return
+    result = st.session_state.agent.run(message)
+    st.session_state.last_result_json = result.response_json
+    SESSION_FILES.add(str(st.session_state.agent.memory_path))
+    st.rerun()
+
+
+def safe_text(value: Any, fallback: str = "Chưa rõ") -> str:
+    text = str(value or "").strip()
+    return text if text else fallback
+
+
+def escape_ics(value: Any) -> str:
+    text = str(value or "")
+    return (
+        text.replace("\\", "\\\\")
+        .replace(",", "\\,")
+        .replace(";", "\\;")
+        .replace("\n", "\\n")
+        .replace("\r", "")
     )
 
-    if selected_option == "Bắt đầu mới" and st.session_state.conversation_id is not None:
-        if st.button("Tạo hội thoại mới"):
-            st.session_state.conversation_id = None
-            st.session_state.agent = DiChoiAgent(st.session_state.settings, None)
-            st.session_state.conversation_id = st.session_state.agent.conversation_id
-            st.rerun()
-    elif selected_option != "Bắt đầu mới" and selected_option != st.session_state.conversation_id:
-        st.session_state.conversation_id = selected_option
-        st.session_state.agent = DiChoiAgent(st.session_state.settings, selected_option)
-        st.rerun()
 
-    st.write("---")
-    st.subheader("⚙️ Cấu hình hiển thị")
-    show_map = st.checkbox("🗺️ Bật Bản đồ & Tương tác", value=True)
-    st.write("---")
-
-    # HangOut Plan Framework Tracker
-    st.subheader("📋 HangOut Plan Framework")
-    st.info("AI trích xuất tự động từ ý định trò chuyện:")
-    
-    # We render fields that are extracted
-    group_size = st.number_input("Số lượng bạn bè:", min_value=1, max_value=30, value=4)
-    vibe = st.text_input("Vibe / Chủ đề đi chơi:", value="Ăn uống & Cafe chill")
-    area = st.text_input("Khu vực cụ thể:", value="Tây Hồ, Hà Nội")
-    timing = st.text_input("Thời gian:", value="Chiều tối thứ Bảy")
-
-    st.write("---")
-
-    # Current HangOut Plan Items
-    st.subheader("📍 HangOut Plan")
-    plan = st.session_state.agent.hangout_plan
-    
-    if not plan:
-        st.warning("Kế hoạch trống. Hãy thêm các địa điểm đề xuất từ chat.")
-    else:
-        for idx, item in enumerate(plan):
-            with st.expander(f"{idx+1}. {item.get('title')}", expanded=True):
-                st.write(f"**Loại:** {item.get('type') or 'N/A'}")
-                st.write(f"**Địa chỉ:** {item.get('address') or 'N/A'}")
-                st.write(f"**Rating:** ⭐ {item.get('rating') or 'N/A'}")
-                # Render delete button
-                if st.button("Xóa khỏi kế hoạch", key=f"del_{idx}"):
-                    st.session_state.agent.remove_from_plan(item.get("title"))
-                    st.rerun()
-
-        # ICS Export option
-        st.write("---")
-        st.subheader("📅 Export")
-        
-        # Build ics string
-        ics_content = []
-        ics_content.append("BEGIN:VCALENDAR")
-        ics_content.append("VERSION:2.0")
-        ics_content.append("PRODID:-//Trip-Guilder-Bot//NONSGML Itinerary//EN")
-        ics_content.append("CALSCALE:GREGORIAN")
-        ics_content.append("METHOD:PUBLISH")
-        
-        today = datetime.date.today()
-        date_str = today.strftime("%Y%m%d")
-        
-        for idx, item in enumerate(plan):
-            time_slot = f"{14 + idx*2:02d}:00 - {16 + idx*2:02d}:00"
-            sh, sm = f"{14 + idx*2:02d}", "00"
-            eh, em = f"{16 + idx*2:02d}", "00"
-            dtstart = f"{date_str}T{sh}{sm}00"
-            dtend = f"{date_str}T{eh}{em}00"
-            
-            uid = f"event-{idx}-{datetime.datetime.now().timestamp()}@tripguilderbot.local"
-            dtstamp = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-            
-            ics_content.append("BEGIN:VEVENT")
-            ics_content.append(f"UID:{uid}")
-            ics_content.append(f"DTSTAMP:{dtstamp}")
-            ics_content.append(f"DTSTART;TZID=Asia/Ho_Chi_Minh:{dtstart}")
-            ics_content.append(f"DTEND;TZID=Asia/Ho_Chi_Minh:{dtend}")
-            ics_content.append(f"SUMMARY:{item.get('title')}")
-            ics_content.append(f"DESCRIPTION:Địa điểm trong kế hoạch HangOut")
-            ics_content.append(f"LOCATION:{item.get('address', '')}")
-            ics_content.append("END:VEVENT")
-            
-        ics_content.append("END:VCALENDAR")
-        full_ics = "\r\n".join(ics_content)
-        
-        st.download_button(
-            label="Tải lịch trình (.ics)",
-            data=full_ics,
-            file_name=f"hangout_plan_{date_str}.ics",
-            mime="text/calendar"
+def build_ics(plan: list[dict[str, Any]]) -> tuple[str, str]:
+    today = dt.date.today()
+    date_str = today.strftime("%Y%m%d")
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//DiChoiBot//Hangout Plan//VI",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    for index, item in enumerate(plan):
+        start_hour = min(22, 14 + index * 2)
+        end_hour = min(23, start_hour + 2)
+        uid = f"dichoibot-{index}-{dt.datetime.now().timestamp()}@local"
+        dtstamp = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        lines.extend(
+            [
+                "BEGIN:VEVENT",
+                f"UID:{uid}",
+                f"DTSTAMP:{dtstamp}",
+                f"DTSTART;TZID=Asia/Ho_Chi_Minh:{date_str}T{start_hour:02d}0000",
+                f"DTEND;TZID=Asia/Ho_Chi_Minh:{date_str}T{end_hour:02d}0000",
+                f"SUMMARY:{escape_ics(item.get('title'))}",
+                f"DESCRIPTION:{escape_ics(item.get('general_comment') or 'Địa điểm trong kế hoạch DiChoiBot')}",
+                f"LOCATION:{escape_ics(item.get('address'))}",
+                "END:VEVENT",
+            ]
         )
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines), date_str
 
-# Main Workspace
-st.title("🗺️ DiChoiBot - AI Friend Hangout Planner")
-st.write("Lên kế hoạch đi chơi cùng nhóm bạn dựa trên đánh giá thực tế của Google Maps.")
 
-# Active flow steps visualization
-st.write("**Quy trình lập kế hoạch:**")
-cols = st.columns(4)
-with cols[0]:
-    st.success("1. Trích xuất ý định")
-with cols[1]:
-    st.info("2. Tìm & Phân tích Reviews")
-with cols[2]:
-    st.warning("3. Chọn & Thêm địa điểm")
-with cols[3]:
-    st.error("4. Xuất lịch trình đi chơi")
+def add_to_plan(place: dict[str, Any]) -> None:
+    st.session_state.agent.add_to_plan(
+        {
+            "title": place.get("title"),
+            "address": place.get("address"),
+            "rating": place.get("rating"),
+            "type": place.get("type"),
+            "gps": place.get("gps"),
+            "data_id": place.get("data_id"),
+            "price": place.get("price"),
+            "score": place.get("score"),
+            "general_comment": place.get("general_comment"),
+        }
+    )
+    st.rerun()
 
-st.write("---")
 
-agent = st.session_state.agent
+def render_sidebar(agent: DiChoiAgent) -> bool:
+    with st.sidebar:
+        st.title("DiChoiBot")
+        st.caption("Session memory chỉ dùng trong phiên hiện tại. App không tự load chat cũ từ local.")
 
-# Split workspace layout into Left (Google Map & Actions) and Right (Chatbot) based on show_map toggle
-if show_map:
-    col_left, col_right = st.columns([4, 5])
-else:
-    col_left = None
-    col_right = st.container()
+        if st.button("Tạo phiên mới", use_container_width=True):
+            reset_session()
 
-# LEFT COLUMN: Google Map Panel & Location Interactions
-if col_left:
-    with col_left:
-        st.subheader("🗺️ Bản đồ & Tương tác vị trí")
-        
-        # Compile options for map center selection
-        map_options = ["Mặc định (Hà Nội)"]
-        if area:
-            map_options[0] = f"Mặc định ({area})"
-            
-        for item in plan:
-            map_options.append(f"Plan: {item.get('title')} ({item.get('address')})")
-            
-        for item in agent.last_recommendations[:5]:
-            map_options.append(f"Đề xuất: {item.get('title')} ({item.get('address')})")
-            
-        selected_map_opt = st.selectbox(
-            "Chọn địa điểm để xem trên bản đồ:",
-            options=map_options,
-            index=0,
-            key="map_center_selectbox"
-        )
-        
-        # Parse selected address/query
-        if selected_map_opt.startswith("Mặc định"):
-            default_q = area if area else "Hà Nội"
-            map_query = default_q
-        elif selected_map_opt.startswith("Plan: "):
-            map_query = selected_map_opt[len("Plan: "):].split(" (")[0]
-        elif selected_map_opt.startswith("Đề xuất: "):
-            map_query = selected_map_opt[len("Đề xuất: "):].split(" (")[0]
+        st.divider()
+        st.subheader("Trạng thái")
+        st.write(f"Memory file: `{agent.memory_path.name}`")
+        st.write(f"Context window: `{agent.settings.conversation_window}` lượt")
+        if agent.settings.has_api_key:
+            st.success("OpenRouter API key đã sẵn sàng.")
         else:
-            map_query = selected_map_opt
-            
-        # Input box to customize or refine search on map
-        map_search = st.text_input(
-            "Tìm kiếm / Tinh chỉnh vị trí trên bản đồ:",
-            value=map_query,
-            key="map_search_input"
-        )
-        
-        # Embed the Google Map iframe
-        import urllib.parse
-        encoded_search = urllib.parse.quote(map_search)
-        embed_url = f"https://maps.google.com/maps?q={encoded_search}&t=&z=15&ie=UTF8&iwloc=&output=embed"
-        
-        st.components.v1.iframe(embed_url, height=450)
-        
-        # Map actions triggers
-        st.markdown("##### ⚡ Tương tác vị trí với Chatbot:")
-        st.write("Yêu cầu chatbot thực hiện tác vụ liên quan đến vị trí trên bản đồ:")
-        
-        col_act1, col_act2, col_act3 = st.columns(3)
-        with col_act1:
-            if st.button("🔍 Đánh giá", use_container_width=True, key="btn_review_map"):
-                submit_user_message(f"Đọc review và đánh giá chi tiết quán: {map_search}")
-        with col_act2:
-            if st.button("📍 Xung quanh", use_container_width=True, key="btn_around_map"):
-                submit_user_message(f"Gợi ý các địa điểm ăn uống, cafe hoặc vui chơi xung quanh: {map_search}")
-        with col_act3:
-            if st.button("➕ Thêm vào Plan", use_container_width=True, key="btn_add_direct_map"):
-                agent.add_to_plan({
+            st.warning("Chưa có OPENROUTER_API_KEY, đang dùng pseudo local fallback.")
+
+        show_map = st.toggle("Hiển thị bản đồ", value=True)
+        show_debug = st.toggle("Hiển thị debug JSON", value=False)
+
+        st.divider()
+        st.subheader("Request state")
+        st.json(agent.request_state, expanded=False)
+
+        if show_debug:
+            st.subheader("Tool log")
+            if agent.tool_log:
+                st.dataframe(agent.tool_log, use_container_width=True)
+            else:
+                st.info("Chưa có tool log trong phiên này.")
+
+            st.subheader("Last JSON")
+            st.json(st.session_state.last_result_json or {}, expanded=False)
+
+        st.divider()
+        st.subheader("Hangout plan")
+        plan = agent.hangout_plan
+        if not plan:
+            st.info("Chưa có địa điểm nào trong plan.")
+        else:
+            for index, item in enumerate(plan):
+                title = safe_text(item.get("title"), "Địa điểm")
+                with st.expander(f"{index + 1}. {title}", expanded=False):
+                    st.write(f"Địa chỉ: {safe_text(item.get('address'))}")
+                    st.write(f"Rating: {safe_text(item.get('rating'))}")
+                    st.write(f"Loại: {safe_text(item.get('type'))}")
+                    if st.button("Xóa khỏi plan", key=f"delete_plan_{index}", use_container_width=True):
+                        agent.remove_from_plan(title)
+                        st.rerun()
+
+            ics_content, date_str = build_ics(plan)
+            st.download_button(
+                "Tải lịch .ics",
+                data=ics_content,
+                file_name=f"dichoibot_plan_{date_str}.ics",
+                mime="text/calendar",
+                use_container_width=True,
+            )
+
+    return show_map
+
+
+def render_map_panel(agent: DiChoiAgent) -> None:
+    st.subheader("Bản đồ")
+
+    map_options = []
+    state_location = agent.request_state.get("location") or "Hà Nội"
+    state_query = agent.request_state.get("search_query") or state_location
+    map_options.append(("Nhu cầu hiện tại", state_query))
+
+    for item in agent.hangout_plan:
+        map_options.append((f"Plan: {safe_text(item.get('title'))}", item.get("address") or item.get("title")))
+
+    for item in agent.last_recommendations[:5]:
+        map_options.append((f"Đề xuất: {safe_text(item.get('title'))}", item.get("address") or item.get("title")))
+
+    labels = [label for label, _ in map_options]
+    selected_label = st.selectbox("Chọn điểm xem trên bản đồ", labels)
+    selected_query = next(query for label, query in map_options if label == selected_label)
+    map_search = st.text_input("Query bản đồ", value=safe_text(selected_query, "Hà Nội"))
+    encoded_search = urllib.parse.quote(map_search)
+    embed_url = f"https://maps.google.com/maps?q={encoded_search}&t=&z=15&ie=UTF8&iwloc=&output=embed"
+    st.components.v1.iframe(embed_url, height=420)
+
+    cols = st.columns(3)
+    with cols[0]:
+        if st.button("Đọc review điểm này", use_container_width=True):
+            submit_user_message(f"Đọc review và đánh giá địa điểm: {map_search}")
+    with cols[1]:
+        if st.button("Tìm quanh đây", use_container_width=True):
+            submit_user_message(f"Gợi ý chỗ đi chơi, ăn uống hoặc cafe quanh {map_search}")
+    with cols[2]:
+        if st.button("Thêm vào plan", use_container_width=True):
+            agent.add_to_plan(
+                {
                     "title": map_search,
-                    "address": "Địa điểm tự chọn từ bản đồ",
+                    "address": "Địa điểm chọn từ bản đồ",
                     "rating": "N/A",
                     "type": "Tự chọn",
-                    "gps": None
-                })
-                st.success(f"Đã thêm {map_search} vào kế hoạch!")
-                st.rerun()
-                
-        st.write("---")
-        
-        # Show active plan route map at the bottom of the left column
-        if plan:
-            st.subheader("📍 Lộ trình các điểm đã chọn:")
-            map_data = []
-            for loc in plan:
-                gps = loc.get("gps")
-                if gps and isinstance(gps, dict):
-                    lat = gps.get("latitude") or gps.get("lat")
-                    lon = gps.get("longitude") or gps.get("lng")
-                    if lat and lon:
-                        map_data.append({
-                            "latitude": float(lat),
-                            "longitude": float(lon),
-                            "title": loc.get("title")
-                        })
-                        
-            if map_data:
-                df = pd.DataFrame(map_data)
-                st.map(df)
-            else:
-                st.info("Chưa có tọa độ GPS để hiển thị lộ trình.")
+                    "gps": None,
+                }
+            )
+            st.rerun()
 
-# RIGHT COLUMN: Chatbot Conversation & Recommendations
-with col_right:
-    # Render conversation turns
+    gps_rows = []
+    for item in agent.hangout_plan:
+        gps = item.get("gps")
+        if isinstance(gps, dict):
+            lat = gps.get("latitude") or gps.get("lat")
+            lon = gps.get("longitude") or gps.get("lng")
+            if lat and lon:
+                gps_rows.append({"latitude": float(lat), "longitude": float(lon)})
+    if gps_rows:
+        st.map(pd.DataFrame(gps_rows))
+
+
+def render_chat(agent: DiChoiAgent) -> None:
+    st.subheader("Chat")
+
     for turn in agent.transcript:
         with st.chat_message("user"):
             st.write(turn.user)
         with st.chat_message("assistant"):
-            st.write(turn.assistant)
-            
-    # Toggle flow choice "Bạn muốn đi tiếp không?"
-    go_next = st.checkbox("Bạn muốn tiếp tục tìm và thêm địa điểm khác cho kế hoạch đi chơi không?", value=True)
-    
-    # Quick Reply Panel if Agent needs clarification
-    if go_next and agent.last_route and agent.last_route.get("decision") == "clarify":
-        missing_info = agent.last_route.get("missing_info", [])
-        if missing_info:
-            primary_missing = missing_info[0]
-            
-            # Map missing info to user options
-            if "khu vực" in primary_missing.lower() or "thành phố" in primary_missing.lower() or "ở đâu" in primary_missing.lower():
-                title = "Chọn khu vực bạn muốn đi chơi:"
-                options = ["Tây Hồ, Hà Nội", "Hoàn Kiếm, Hà Nội", "Cầu Giấy, Hà Nội"]
-            elif "trải nghiệm" in primary_missing.lower() or "kiểu" in primary_missing.lower():
-                title = "Chọn kiểu trải nghiệm bạn muốn:"
-                options = ["Cafe chill & sống ảo", "Ăn uống ẩm thực", "Vui chơi & hoạt động nhóm"]
-            else:
-                title = f"Vui lòng chọn một lựa chọn nhanh hoặc nhập tự chọn ở khung chat:"
-                options = ["Tây Hồ, Hà Nội", "Cafe & Ăn uống", "Hoạt động ngoài trời"]
-                
-            st.markdown(f"""
-            <div style="background-color: #f0f4f8; padding: 15px; border-radius: 8px; border-left: 5px solid #2b5c8f; margin-bottom: 15px;">
-                <p style="margin: 0; font-weight: bold; color: #2b5c8f;">💡 Trả lời nhanh cho Bot:</p>
-                <p style="margin: 5px 0 10px 0; font-size: 0.95em;">Bot đang thiếu thông tin: <b>{primary_missing}</b></p>
+            st.markdown(turn.assistant)
+
+    questions = []
+    if agent.last_response and isinstance(agent.last_response.get("follow_up_questions"), list):
+        questions = agent.last_response["follow_up_questions"]
+    if questions:
+        st.info("Bot đang cần bạn bổ sung thông tin.")
+        cols = st.columns(min(3, max(1, len(questions))))
+        for index, question in enumerate(questions[:3]):
+            with cols[index % len(cols)]:
+                st.caption(question)
+
+    st.markdown("#### Gợi ý nhanh")
+    quick_prompts = [
+        "Tìm quán cà phê yên tĩnh ở Hà Nội",
+        "Mình muốn đi chơi gần VinUni",
+        "Ưu tiên giá rẻ, dễ gửi xe",
+    ]
+    quick_cols = st.columns(3)
+    for index, prompt in enumerate(quick_prompts):
+        with quick_cols[index]:
+            if st.button(prompt, key=f"quick_prompt_{index}", use_container_width=True):
+                submit_user_message(prompt)
+
+    user_query = st.chat_input("Nhập nhu cầu hoặc trả lời câu hỏi của bot...")
+    if user_query:
+        submit_user_message(user_query)
+
+
+def render_recommendations(agent: DiChoiAgent) -> None:
+    recommendations = agent.last_recommendations[:5]
+    if not recommendations:
+        return
+
+    st.subheader("Địa điểm được đề xuất")
+    for index, place in enumerate(recommendations):
+        title = safe_text(place.get("title"), "Địa điểm chưa rõ tên")
+        address = safe_text(place.get("address"))
+        rating = safe_text(place.get("rating"))
+        score = safe_text(place.get("score"))
+        price = safe_text(place.get("price"))
+        comment = safe_text(place.get("general_comment"), "")
+        safe_comment = html.escape(comment)
+
+        st.markdown(
+            f"""
+            <div class="recommendation-card">
+                <div class="recommendation-title">{index + 1}. {html.escape(title)}</div>
+                <div class="metric-row">Địa chỉ: {html.escape(address)}</div>
+                <div class="metric-row">Rating: {html.escape(rating)} | Score: {html.escape(score)} | Giá: {html.escape(price)}</div>
+                <div>{safe_comment}</div>
             </div>
-            """, unsafe_allow_html=True)
-            st.write(f"*{title}*")
-            
-            cols = st.columns(3)
-            for idx, opt in enumerate(options):
-                with cols[idx]:
-                    if st.button(opt, key=f"quick_reply_{idx}", use_container_width=True):
-                        submit_user_message(opt)
-            st.write("---")
-            
-    # Main chat input block
-    if go_next:
-        user_query = st.chat_input("Nhập yêu cầu tìm quán cafe, chỗ ăn uống hay vui chơi, hoặc nhập câu trả lời của bạn...")
-        if user_query:
-            submit_user_message(user_query)
+            """,
+            unsafe_allow_html=True,
+        )
+
+        cols = st.columns([1, 3])
+        with cols[0]:
+            if st.button("Thêm vào plan", key=f"add_recommendation_{index}", use_container_width=True):
+                add_to_plan(place)
+        with cols[1]:
+            if st.button("Hỏi kỹ hơn", key=f"ask_more_{index}", use_container_width=True):
+                submit_user_message(f"Phân tích kỹ hơn địa điểm {title}, ưu nhược điểm theo review")
+
+
+def main() -> None:
+    init_session()
+    agent: DiChoiAgent = st.session_state.agent
+    show_map = render_sidebar(agent)
+
+    st.title("DiChoiBot")
+    st.caption("Tìm quán cafe, quán ăn, chỗ chill hoặc địa điểm đi chơi ngắn hạn dựa trên review.")
+
+    if show_map:
+        col_map, col_chat = st.columns([4, 5])
+        with col_map:
+            render_map_panel(agent)
+        with col_chat:
+            render_chat(agent)
+            render_recommendations(agent)
     else:
-        st.success("🎉 Bạn đã quyết định chốt lịch trình này! Hãy tải lịch (.ics) từ sidebar hoặc xem sơ đồ bên dưới.")
-        
-    # Display recommended locations as interactive cards (if any are available)
-    if agent.last_recommendations and go_next:
-        st.subheader("📍 Địa điểm được đề xuất dựa trên đánh giá:")
-        
-        for idx, place in enumerate(agent.last_recommendations[:5]):
-            with st.container():
-                st.markdown(f"""
-                <div class="recommendation-card">
-                    <h3>{idx+1}. {place.get('title')} ({place.get('type') or 'Địa điểm'})</h3>
-                    <p><b>Địa chỉ:</b> {place.get('address')}</p>
-                    <p><b>Rating:</b> ⭐ {place.get('rating')} | <b>Score:</b> {place.get('score')} | <b>Giá:</b> {place.get('price') or 'Chưa rõ'}</p>
-                    <p><i>{place.get('general_comment') or ''}</i></p>
-                </div>
-                """, unsafe_allowed_html=True)
-                
-                # Action button to add to plan
-                if st.button(f"Thêm {place.get('title')} vào Kế hoạch", key=f"add_{idx}"):
-                    agent.add_to_plan({
-                        "title": place.get("title"),
-                        "address": place.get("address"),
-                        "rating": place.get("rating"),
-                        "type": place.get("type"),
-                        "gps": place.get("gps"),
-                        "data_id": place.get("data_id")
-                    })
-                    st.success(f"Đã thêm {place.get('title')}!")
-                    st.rerun()
+        render_chat(agent)
+        render_recommendations(agent)
+
+
+if __name__ == "__main__":
+    main()

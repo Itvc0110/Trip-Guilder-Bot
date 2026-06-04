@@ -134,7 +134,7 @@ def _generate_llm_comment(place: dict, recent_reviews: list[dict], user_request:
     review_text = "\n".join(review_context)
 
     prompt = f"""Bạn là chuyên gia review địa điểm hẹn hò tại Hà Nội.
-Viết một đoạn nhận xét ngắn gọn, chân thực, tự nhiên bằng tiếng Việt cho cặp đôi.
+Viết một đoạn nhận xét ngắn gọn, chân thực, tự nhiên bằng tiếng Việt cho người đi chơi.
 
 Tên địa điểm: {name}
 Yêu cầu của user: {user_request}
@@ -154,7 +154,7 @@ Yêu cầu output:
             response = client.chat(
                 model=settings.planner_model,
                 messages=[
-                    {"role": "system", "content": "Bạn là trợ lý review địa điểm hẹn hò chuyên nghiệp, trung thực."},
+                    {"role": "system", "content": "Bạn là trợ lý review địa điểm đi chơi, giải trí."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.4,
@@ -169,4 +169,4 @@ Yêu cầu output:
     return (f"**Nhận xét về {name}**: "
             f"Có review mới gần đây từ khách hàng. "
             f"Đa số đánh giá tích cực với không gian và dịch vụ. "
-            f"Phù hợp cho buổi hẹn hò { 'lãng mạn' if 'hẹn' in user_request.lower() else 'thư giãn'}.")
+            f"Phù hợp cho buổi đi chơi.")
