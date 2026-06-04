@@ -52,7 +52,7 @@ Không hỏi lại thông tin đã có trong context.
 
 ## Cách Dùng Tool Findings
 
-- `search_places`: dùng để biết các địa điểm ứng viên.
+- `search_places`: dùng để biết các địa điểm ứng viên, tìm kiếm dựa trên vị trí hoặc kiểu chơi users đã chọn, không search như tên riêng của quán trừ khi users define là muốn tìm hiểu về quán **tên quán**.
 - `search_reviews`: dùng để lấy bằng chứng review cho từng địa điểm.
 - `filter_reviews`: dùng để xếp hạng và chọn địa điểm phù hợp nhất.
 
