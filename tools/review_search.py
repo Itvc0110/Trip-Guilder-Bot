@@ -1,12 +1,11 @@
-"""Tool search_reviews — Lấy review thô từ Google Maps.
+"""Tool search_reviews - lay review tho tu Google Maps qua SerpAPI.
 
-Nhiệm vụ chính:
-- Lấy tối đa 10 review thô (5 review đánh giá cao nhất + 5 review đánh giá thấp nhất).
-- Trả về đầy đủ thông tin: user (tên người comment), rating (score), date (thời gian), snippet (nội dung comment).
-- Không tóm tắt, không lọc, không bịa dữ liệu — chỉ trả review nguyên bản.
+Pipeline:
+    search_places -> search_reviews -> filter_reviews
 
-Vị trí trong pipeline: 
-    search_places → search_reviews → filter_reviews
+Tool nay chi lay review tho, khong tom tat, khong loc, khong bia du lieu.
+Mac dinh lay toi da 10 review: 5 review rating cao nhat va 5 review rating
+thap nhat.
 """
 
 from __future__ import annotations
@@ -17,12 +16,7 @@ from typing import Any
 import requests
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 SERPAPI_URL = "https://serpapi.com/search"
-
-# Số review tối đa mỗi chiều
 DEFAULT_MAX_HIGH = 5
 DEFAULT_MAX_LOW = 5
 
@@ -30,24 +24,24 @@ DEFAULT_MAX_LOW = 5
 TOOL_DEFINITION = {
     "name": "search_reviews",
     "description": (
-        "Lấy review thực tế của một địa điểm Google Maps: "
-        f"{DEFAULT_MAX_HIGH} review đánh giá cao nhất và {DEFAULT_MAX_LOW} review đánh giá thấp nhất. "
-        "Trả về review thô (user, rating, date, snippet) để filter_reviews xử lý tiếp."
+        "Lay review thuc te cua mot dia diem Google Maps: "
+        f"{DEFAULT_MAX_HIGH} review danh gia cao nhat va {DEFAULT_MAX_LOW} review danh gia thap nhat. "
+        "Tra ve review tho de filter_reviews xu ly tiep."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             "place": {
                 "type": "object",
-                "description": "Một phần tử trong danh sách 'places' từ kết quả search_places.",
+                "description": "Mot phan tu trong danh sach places tu search_places.",
             },
             "max_high": {
                 "type": "integer",
-                "description": f"Số review cao nhất muốn lấy. Mặc định {DEFAULT_MAX_HIGH}.",
+                "description": f"So review cao nhat muon lay. Mac dinh {DEFAULT_MAX_HIGH}.",
             },
             "max_low": {
                 "type": "integer",
-                "description": f"Số review thấp nhất muốn lấy. Mặc định {DEFAULT_MAX_LOW}.",
+                "description": f"So review thap nhat muon lay. Mac dinh {DEFAULT_MAX_LOW}.",
             },
         },
         "required": ["place"],
@@ -60,29 +54,28 @@ def search_reviews(
     max_high: int = DEFAULT_MAX_HIGH,
     max_low: int = DEFAULT_MAX_LOW,
 ) -> dict[str, Any]:
-    """Đọc review thực tế cho một địa điểm theo data_id từ SerpAPI."""
+    """Doc review thuc te cho mot dia diem theo data_id tu SerpAPI."""
     if not isinstance(place, dict):
-        return _error_result("place phải là dict từ kết quả search_places.")
+        return _error_result("place phai la dict tu ket qua search_places.")
 
     data_id = str(place.get("data_id") or "").strip()
-    place_name = str(place.get("title") or "").strip()
-    place_addr = str(place.get("address") or "").strip()
-    display_name = place_name or data_id or "địa điểm không rõ tên"
+    place_name = str(place.get("title") or place.get("place_name") or "").strip()
+    place_addr = str(place.get("address") or place.get("place_addr") or "").strip()
+    display_name = place_name or data_id or "dia diem khong ro ten"
 
     if not data_id:
         return _error_result(
-            f"data_id rỗng cho địa điểm '{display_name}'.",
+            f"data_id rong cho dia diem '{display_name}'.",
             place_name=place_name,
             place_addr=place_addr,
         )
 
-    # Kiểm tra API key
     api_key = os.getenv("SERPAPI_API_KEY", "").strip()
-    if not api_key or api_key in ("optional_for_live_place_and_review_tools", "optional_for_future_tools"):
+    if not api_key or api_key in {"optional_for_live_place_and_review_tools", "optional_for_future_tools"}:
         return {
             "tool_name": "search_reviews",
             "status": "unavailable",
-            "summary": f"Chưa có SERPAPI_API_KEY — chưa thể lấy review thật cho '{display_name}'.",
+            "summary": f"Chua co SERPAPI_API_KEY nen chua the lay review that cho '{display_name}'.",
             "place_name": place_name,
             "place_addr": place_addr,
             "data_id": data_id,
@@ -92,39 +85,41 @@ def search_reviews(
             "verified": False,
         }
 
-    # Gọi 2 lần SerpAPI
     high_reviews, fetched_name_high = _fetch_reviews(
-        data_id=data_id, api_key=api_key, sort_by="ratingHigh", max_count=max_high
+        data_id=data_id,
+        api_key=api_key,
+        sort_by="ratingHigh",
+        max_count=max_high,
     )
     low_reviews, fetched_name_low = _fetch_reviews(
-        data_id=data_id, api_key=api_key, sort_by="ratingLow", max_count=max_low
+        data_id=data_id,
+        api_key=api_key,
+        sort_by="ratingLow",
+        max_count=max_low,
     )
 
-    # Ưu tiên tên từ API
     if not place_name:
         place_name = fetched_name_high or fetched_name_low or data_id
 
-    # Gắn nhãn
-    for r in high_reviews:
-        r["_sort_by"] = "ratingHigh"
-    for r in low_reviews:
-        r["_sort_by"] = "ratingLow"
+    for review in high_reviews:
+        review["_sort_by"] = "ratingHigh"
+    for review in low_reviews:
+        review["_sort_by"] = "ratingLow"
 
     all_reviews = high_reviews + low_reviews
     high_count = len(high_reviews)
     low_count = len(low_reviews)
     total = high_count + low_count
 
-    # Xác định status
     if total == 0:
         status = "partial"
-        summary = f"Không lấy được review nào cho '{place_name}'."
+        summary = f"Khong lay duoc review nao cho '{place_name}'."
     elif high_count < max_high or low_count < max_low:
         status = "partial"
-        summary = f"Lấy được {total} review cho '{place_name}' ({high_count} cao + {low_count} thấp)."
+        summary = f"Lay duoc {total} review cho '{place_name}' ({high_count} cao + {low_count} thap)."
     else:
         status = "success"
-        summary = f"Lấy được {total} review cho '{place_name}' (5 cao nhất + 5 thấp nhất)."
+        summary = f"Lay duoc {total} review cho '{place_name}' ({max_high} cao nhat + {max_low} thap nhat)."
 
     return {
         "tool_name": "search_reviews",
@@ -140,56 +135,35 @@ def search_reviews(
     }
 
 
-# ---------------------------------------------------------------------------
-<<<<<<< HEAD
-# Batch helper — tiện ích cho test hoặc gọi ngoài registry
-# ---------------------------------------------------------------------------
-def search_reviews_for_places(
-    places: list[dict[str, Any]],
-    max_high: int = DEFAULT_MAX_HIGH,
-    max_low: int = DEFAULT_MAX_LOW,
-) -> list[dict[str, Any]]:
-    """Lấy review cho nhiều địa điểm từ output của search_places.
-
-    Parameters
-    ----------
-    places:
-        Danh sách địa điểm, lấy từ trường ``places`` trong kết quả search_places.
-    max_high:
-        Số review đánh giá cao nhất lấy cho mỗi địa điểm. Mặc định 5.
-    max_low:
-        Số review đánh giá thấp nhất lấy cho mỗi địa điểm. Mặc định 5.
-
-    Returns
-    -------
-    list[dict]
-        Danh sách kết quả review tương ứng với từng địa điểm có data_id.
-    """
-    return [
-        search_reviews(place, max_high=max_high, max_low=max_low)
-        for place in places
-        if isinstance(place, dict) and place.get("data_id")
-    ]
+def review_search(place: dict[str, Any]) -> dict[str, Any]:
+    """Backward-compatible alias for registry imports."""
+    return search_reviews(place)
 
 
-# ---------------------------------------------------------------------------
-# Backward-compat alias — registry cũ có thể import get_place_reviews
-# ---------------------------------------------------------------------------
 def get_place_reviews(
     data_id: str,
     max_best: int = DEFAULT_MAX_HIGH,
     max_worst: int = DEFAULT_MAX_LOW,
 ) -> dict[str, Any]:
-    """Alias backward-compat với API cũ dùng data_id trực tiếp.
-
-    Được giữ để test_review_search.py cũ không bị lỗi import.
-    Registry mới dùng search_reviews(place) thay thế.
-    """
+    """Backward-compatible helper for tests that pass data_id directly."""
     return search_reviews(
         place={"data_id": data_id},
         max_high=max_best,
         max_low=max_worst,
     )
+
+
+def search_reviews_for_places(
+    places: list[dict[str, Any]],
+    max_high: int = DEFAULT_MAX_HIGH,
+    max_low: int = DEFAULT_MAX_LOW,
+) -> list[dict[str, Any]]:
+    """Lay review cho nhieu dia diem tu output cua search_places."""
+    return [
+        search_reviews(place, max_high=max_high, max_low=max_low)
+        for place in places
+        if isinstance(place, dict) and place.get("data_id")
+    ]
 
 
 def get_reviews_for_places(
@@ -208,21 +182,12 @@ def get_reviews_for_places(
     return results
 
 
-def review_search(place: dict[str, Any]) -> dict[str, Any]:
-    """Backward-compatible alias for registry imports."""
-    return search_reviews(place)
-
-
-# ---------------------------------------------------------------------------
-# Internal: gọi SerpAPI một chiều (ratingHigh hoặc ratingLow)
-=======
-# Internal Functions
->>>>>>> 52189a2586044cfb1448290c4a9790df1bde42a9
-# ---------------------------------------------------------------------------
 def _fetch_reviews(
-    data_id: str, api_key: str, sort_by: str, max_count: int
+    data_id: str,
+    api_key: str,
+    sort_by: str,
+    max_count: int,
 ) -> tuple[list[dict[str, Any]], str]:
-    """Gọi SerpAPI lấy review theo sort."""
     if max_count <= 0:
         return [], ""
 
@@ -240,7 +205,9 @@ def _fetch_reviews(
         )
         response.raise_for_status()
         data = response.json()
-    except Exception:
+    except requests.RequestException:
+        return [], ""
+    except ValueError:
         return [], ""
 
     if data.get("error"):
@@ -255,12 +222,10 @@ def _fetch_reviews(
     if not isinstance(raw_reviews, list):
         return [], fetched_name
 
-    normalized = [_normalize_review(r) for r in raw_reviews[:max_count]]
-    return normalized, fetched_name
+    return [_normalize_review(review) for review in raw_reviews[:max_count]], fetched_name
 
 
 def _normalize_review(review: dict[str, Any]) -> dict[str, Any]:
-    """Chuẩn hóa review thô từ SerpAPI."""
     user_field = review.get("user")
     if isinstance(user_field, dict):
         username = user_field.get("name") or user_field.get("link") or None
@@ -274,6 +239,7 @@ def _normalize_review(review: dict[str, Any]) -> dict[str, Any]:
         "rating": review.get("rating"),
         "date": review.get("date") or review.get("iso_date") or None,
         "snippet": review.get("snippet") or review.get("text") or None,
+        "text": review.get("snippet") or review.get("text") or None,
         "likes": review.get("likes"),
         "source": review.get("source"),
     }
@@ -297,28 +263,3 @@ def _error_result(
         "low_count": 0,
         "verified": False,
     }
-
-
-# ---------------------------------------------------------------------------
-# Backward Compatibility
-# ---------------------------------------------------------------------------
-def get_place_reviews(
-    data_id: str, max_best: int = 5, max_worst: int = 5
-) -> dict[str, Any]:
-    """Alias cho test cũ."""
-    return search_reviews(
-        place={"data_id": data_id}, max_high=max_best, max_low=max_worst
-    )
-
-
-def search_reviews_for_places(
-    places: list[dict[str, Any]],
-    max_high: int = DEFAULT_MAX_HIGH,
-    max_low: int = DEFAULT_MAX_LOW,
-) -> list[dict[str, Any]]:
-    """Lấy review cho nhiều địa điểm."""
-    return [
-        search_reviews(place, max_high=max_high, max_low=max_low)
-        for place in places
-        if isinstance(place, dict) and place.get("data_id")
-    ]
