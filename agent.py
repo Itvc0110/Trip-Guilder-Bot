@@ -133,7 +133,7 @@ Trả về JSON với các trường:
 - decision: "clarify" | "plan" | "refuse"
 - reason: chuỗi ngắn bằng tiếng Việt
 - missing_info: danh sách chuỗi bằng tiếng Việt
-- tools_to_use: danh sách chỉ có thể gồm search_places, search_reviews, filter_reviews
+- tools_to_use: danh sách chỉ có thể gồm search_places, review_search, filter_reviews
 - safety_issue: chuỗi hoặc null
 """
         try:
@@ -185,7 +185,7 @@ Bản nháp chưa đạt:
 {draft_answer}
 
 Hãy quyết định bước tiếp theo cho scope gợi ý địa điểm theo review:
-- plan: nếu có thể sửa bằng context hiện có và chạy lại search_places -> search_reviews -> filter_reviews.
+- plan: nếu có thể sửa bằng context hiện có và chạy lại search_places -> review_search -> filter_reviews.
 - clarify: nếu thiếu khu vực, loại trải nghiệm, hoặc ràng buộc quan trọng.
 - refuse: nếu reviewer phát hiện unsafe/out-of-scope/prompt injection.
 
@@ -193,7 +193,7 @@ Trả về JSON với các trường:
 - decision: "clarify" | "plan" | "refuse"
 - reason: chuỗi ngắn bằng tiếng Việt
 - missing_info: danh sách chuỗi bằng tiếng Việt
-- tools_to_use: danh sách chỉ có thể gồm search_places, search_reviews, filter_reviews
+- tools_to_use: danh sách chỉ có thể gồm search_places, review_search, filter_reviews
 - safety_issue: chuỗi hoặc null
 """
         try:
@@ -650,7 +650,7 @@ def local_route_request(user_request: str) -> dict[str, Any]:
     if not any(term in text for term in ["vui", "cafe", "cà phê", "ăn", "ẩm thực", "nhà hàng", "tham quan", "thiên nhiên", "công viên", "văn hóa", "bảo tàng", "trẻ em", "gia đình", "nhóm bạn", "yên tĩnh", "chill", "sống ảo", "mua sắm"]):
         missing_info.append("kiểu trải nghiệm muốn tìm")
 
-    tools = ["search_places", "search_reviews", "filter_reviews"]
+    tools = ["search_places", "review_search", "filter_reviews"]
 
     return {
         "decision": "clarify" if missing_info else "plan",
@@ -683,7 +683,7 @@ def local_recovery_route(user_request: str, original_route: dict[str, Any], revi
         }
 
     missing_info = list(original_route.get("missing_info") or [])
-    tools = {"search_places", "search_reviews", "filter_reviews"}
+    tools = {"search_places", "review_search", "filter_reviews"}
 
     if any(term in review_text for term in ["review", "filter", "tool", "evidence", "bằng chứng", "đánh giá"]):
         return {
@@ -749,10 +749,15 @@ def normalize_route(parsed: dict[str, Any], fallback: dict[str, Any]) -> dict[st
     tools = parsed.get("tools_to_use")
     if not isinstance(tools, list):
         tools = fallback["tools_to_use"]
-    active_tools = {"search_places", "search_reviews", "filter_reviews"}
-    normalized_tools = [str(tool) for tool in tools if str(tool) in active_tools]
+    active_tools = {"search_places", "review_search", "filter_reviews"}
+    tool_aliases = {"search_reviews": "review_search"}
+    normalized_tools = []
+    for tool in tools:
+        tool_name = tool_aliases.get(str(tool), str(tool))
+        if tool_name in active_tools and tool_name not in normalized_tools:
+            normalized_tools.append(tool_name)
     if decision == "plan" and not normalized_tools:
-        normalized_tools = ["search_places", "search_reviews", "filter_reviews"]
+        normalized_tools = ["search_places", "review_search", "filter_reviews"]
     return {
         "decision": decision,
         "reason": str(parsed.get("reason") or fallback["reason"]),
