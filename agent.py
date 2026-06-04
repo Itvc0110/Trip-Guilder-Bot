@@ -488,7 +488,7 @@ Hãy quyết định bước tiếp theo:
             {
                 "response_type": "refusal",
                 "answer": answer,
-                "follow_up_questions": ["Bạn muốn tìm chỗ đi chơi an toàn, hợp pháp ở khu vực nào?"],
+                "follow_up_questions": ["Bạn muốn tìm chỗ đi chơi ở khu vực nào?"],
                 "warnings": [issue],
             },
             response_type="refusal",
