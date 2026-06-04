@@ -161,7 +161,7 @@ def add_to_plan(place: dict[str, Any]) -> None:
 
 def render_sidebar(agent: DiChoiAgent) -> bool:
     with st.sidebar:
-        st.title("DiChoiBot")
+        st.title("HangOutBuddy")
         st.caption("Session memory chỉ dùng trong phiên hiện tại. App không tự load chat cũ từ local.")
 
         if st.button("Tạo phiên mới", use_container_width=True):
