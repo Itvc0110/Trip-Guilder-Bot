@@ -63,7 +63,7 @@ class DiChoiAgent:
     def run(self, user_request: str) -> AgentResult:
         conversation_context = self._conversation_context()
         route = self._route_request(user_request, conversation_context)
-        tool_findings = run_placeholder_tools(route, user_request)
+        tool_findings = run_placeholder_tools(route, user_request, conversation_context)
         revision_count = 0
 
         if route.get("decision") == "refuse":
@@ -98,7 +98,7 @@ class DiChoiAgent:
                         "vì thiếu thông tin quan trọng."
                     )
                     break
-                tool_findings = run_placeholder_tools(recovery_route, user_request)
+                tool_findings = run_placeholder_tools(recovery_route, user_request, conversation_context)
                 draft_answer = self._revise_answer(
                     user_request=user_request,
                     route=recovery_route,

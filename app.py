@@ -89,6 +89,9 @@ with st.sidebar:
         st.rerun()
 
     st.write("---")
+    st.subheader("⚙️ Cấu hình hiển thị")
+    show_map = st.checkbox("🗺️ Bật Bản đồ & Tương tác", value=True)
+    st.write("---")
 
     # HangOut Plan Framework Tracker
     st.subheader("📋 HangOut Plan Framework")
@@ -182,103 +185,186 @@ with cols[3]:
 
 st.write("---")
 
-# Render conversation turns
 agent = st.session_state.agent
-for turn in agent.transcript:
-    with st.chat_message("user"):
-        st.write(turn.user)
-    with st.chat_message("assistant"):
-        st.write(turn.assistant)
 
-# Toggle flow choice "Bạn muốn đi tiếp không?"
-go_next = st.checkbox("Bạn muốn tiếp tục tìm và thêm địa điểm khác cho kế hoạch đi chơi không?", value=True)
-
-# Quick Reply Panel if Agent needs clarification
-if go_next and agent.last_route and agent.last_route.get("decision") == "clarify":
-    missing_info = agent.last_route.get("missing_info", [])
-    if missing_info:
-        primary_missing = missing_info[0]
-        
-        # Map missing info to user options
-        if "khu vực" in primary_missing.lower() or "thành phố" in primary_missing.lower() or "ở đâu" in primary_missing.lower():
-            title = "Chọn khu vực bạn muốn đi chơi:"
-            options = ["Tây Hồ, Hà Nội", "Hoàn Kiếm, Hà Nội", "Cầu Giấy, Hà Nội"]
-        elif "trải nghiệm" in primary_missing.lower() or "kiểu" in primary_missing.lower():
-            title = "Chọn kiểu trải nghiệm bạn muốn:"
-            options = ["Cafe chill & sống ảo", "Ăn uống ẩm thực", "Vui chơi & hoạt động nhóm"]
-        else:
-            title = f"Vui lòng chọn một lựa chọn nhanh hoặc nhập tự chọn ở khung chat:"
-            options = ["Tây Hồ, Hà Nội", "Cafe & Ăn uống", "Hoạt động ngoài trời"]
-            
-        st.markdown(f"""
-        <div style="background-color: #f0f4f8; padding: 15px; border-radius: 8px; border-left: 5px solid #2b5c8f; margin-bottom: 15px;">
-            <p style="margin: 0; font-weight: bold; color: #2b5c8f;">💡 Trả lời nhanh cho Bot:</p>
-            <p style="margin: 5px 0 10px 0; font-size: 0.95em;">Bot đang thiếu thông tin: <b>{primary_missing}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.write(f"*{title}*")
-        
-        cols = st.columns(3)
-        for idx, opt in enumerate(options):
-            with cols[idx]:
-                if st.button(opt, key=f"quick_reply_{idx}", use_container_width=True):
-                    submit_user_message(opt)
-        st.write("---")
-
-# Main chat input block
-if go_next:
-    user_query = st.chat_input("Nhập yêu cầu tìm quán cafe, chỗ ăn uống hay vui chơi, hoặc nhập câu trả lời của bạn...")
-    if user_query:
-        submit_user_message(user_query)
+# Split workspace layout into Left (Google Map & Actions) and Right (Chatbot) based on show_map toggle
+if show_map:
+    col_left, col_right = st.columns([4, 5])
 else:
-    st.success("🎉 Bạn đã quyết định chốt lịch trình này! Hãy tải lịch (.ics) từ sidebar hoặc xem sơ đồ bên dưới.")
+    col_left = None
+    col_right = st.container()
 
-# Display recommended locations as interactive cards (if any are available)
-if agent.last_recommendations and go_next:
-    st.subheader("📍 Địa điểm được đề xuất dựa trên đánh giá:")
-    
-    for idx, place in enumerate(agent.last_recommendations[:5]):
-        with st.container():
-            st.markdown(f"""
-            <div class="recommendation-card">
-                <h3>{idx+1}. {place.get('title')} ({place.get('type') or 'Địa điểm'})</h3>
-                <p><b>Địa chỉ:</b> {place.get('address')}</p>
-                <p><b>Rating:</b> ⭐ {place.get('rating')} | <b>Score:</b> {place.get('score')} | <b>Giá:</b> {place.get('price') or 'Chưa rõ'}</p>
-                <p><i>{place.get('general_comment') or ''}</i></p>
-            </div>
-            """, unsafe_allowed_html=True)
+# LEFT COLUMN: Google Map Panel & Location Interactions
+if col_left:
+    with col_left:
+        st.subheader("🗺️ Bản đồ & Tương tác vị trí")
+        
+        # Compile options for map center selection
+        map_options = ["Mặc định (Hà Nội)"]
+        if area:
+            map_options[0] = f"Mặc định ({area})"
             
-            # Action button to add to plan
-            if st.button(f"Thêm {place.get('title')} vào Kế hoạch", key=f"add_{idx}"):
+        for item in plan:
+            map_options.append(f"Plan: {item.get('title')} ({item.get('address')})")
+            
+        for item in agent.last_recommendations[:5]:
+            map_options.append(f"Đề xuất: {item.get('title')} ({item.get('address')})")
+            
+        selected_map_opt = st.selectbox(
+            "Chọn địa điểm để xem trên bản đồ:",
+            options=map_options,
+            index=0,
+            key="map_center_selectbox"
+        )
+        
+        # Parse selected address/query
+        if selected_map_opt.startswith("Mặc định"):
+            default_q = area if area else "Hà Nội"
+            map_query = default_q
+        elif selected_map_opt.startswith("Plan: "):
+            map_query = selected_map_opt[len("Plan: "):].split(" (")[0]
+        elif selected_map_opt.startswith("Đề xuất: "):
+            map_query = selected_map_opt[len("Đề xuất: "):].split(" (")[0]
+        else:
+            map_query = selected_map_opt
+            
+        # Input box to customize or refine search on map
+        map_search = st.text_input(
+            "Tìm kiếm / Tinh chỉnh vị trí trên bản đồ:",
+            value=map_query,
+            key="map_search_input"
+        )
+        
+        # Embed the Google Map iframe
+        import urllib.parse
+        encoded_search = urllib.parse.quote(map_search)
+        embed_url = f"https://maps.google.com/maps?q={encoded_search}&t=&z=15&ie=UTF8&iwloc=&output=embed"
+        
+        st.components.v1.iframe(embed_url, height=450)
+        
+        # Map actions triggers
+        st.markdown("##### ⚡ Tương tác vị trí với Chatbot:")
+        st.write("Yêu cầu chatbot thực hiện tác vụ liên quan đến vị trí trên bản đồ:")
+        
+        col_act1, col_act2, col_act3 = st.columns(3)
+        with col_act1:
+            if st.button("🔍 Đánh giá", use_container_width=True, key="btn_review_map"):
+                submit_user_message(f"Đọc review và đánh giá chi tiết quán: {map_search}")
+        with col_act2:
+            if st.button("📍 Xung quanh", use_container_width=True, key="btn_around_map"):
+                submit_user_message(f"Gợi ý các địa điểm ăn uống, cafe hoặc vui chơi xung quanh: {map_search}")
+        with col_act3:
+            if st.button("➕ Thêm vào Plan", use_container_width=True, key="btn_add_direct_map"):
                 agent.add_to_plan({
-                    "title": place.get("title"),
-                    "address": place.get("address"),
-                    "rating": place.get("rating"),
-                    "type": place.get("type"),
-                    "gps": place.get("gps"),
-                    "data_id": place.get("data_id")
+                    "title": map_search,
+                    "address": "Địa điểm tự chọn từ bản đồ",
+                    "rating": "N/A",
+                    "type": "Tự chọn",
+                    "gps": None
                 })
-                st.success(f"Đã thêm {place.get('title')}!")
+                st.success(f"Đã thêm {map_search} vào kế hoạch!")
                 st.rerun()
-
-# Display interactive map at the bottom if locations exist
-if plan:
-    st.subheader("🗺️ Bản đồ các điểm đã chọn trong kế hoạch:")
-    map_data = []
-    for loc in plan:
-        gps = loc.get("gps")
-        if gps and isinstance(gps, dict):
-            lat = gps.get("latitude") or gps.get("lat")
-            lon = gps.get("longitude") or gps.get("lng")
-            if lat and lon:
-                map_data.append({
-                    "latitude": float(lat),
-                    "longitude": float(lon),
-                    "title": loc.get("title")
-                })
                 
-    if map_data:
-        df = pd.DataFrame(map_data)
-        st.map(df)
+        st.write("---")
+        
+        # Show active plan route map at the bottom of the left column
+        if plan:
+            st.subheader("📍 Lộ trình các điểm đã chọn:")
+            map_data = []
+            for loc in plan:
+                gps = loc.get("gps")
+                if gps and isinstance(gps, dict):
+                    lat = gps.get("latitude") or gps.get("lat")
+                    lon = gps.get("longitude") or gps.get("lng")
+                    if lat and lon:
+                        map_data.append({
+                            "latitude": float(lat),
+                            "longitude": float(lon),
+                            "title": loc.get("title")
+                        })
+                        
+            if map_data:
+                df = pd.DataFrame(map_data)
+                st.map(df)
+            else:
+                st.info("Chưa có tọa độ GPS để hiển thị lộ trình.")
+
+# RIGHT COLUMN: Chatbot Conversation & Recommendations
+with col_right:
+    # Render conversation turns
+    for turn in agent.transcript:
+        with st.chat_message("user"):
+            st.write(turn.user)
+        with st.chat_message("assistant"):
+            st.write(turn.assistant)
+            
+    # Toggle flow choice "Bạn muốn đi tiếp không?"
+    go_next = st.checkbox("Bạn muốn tiếp tục tìm và thêm địa điểm khác cho kế hoạch đi chơi không?", value=True)
+    
+    # Quick Reply Panel if Agent needs clarification
+    if go_next and agent.last_route and agent.last_route.get("decision") == "clarify":
+        missing_info = agent.last_route.get("missing_info", [])
+        if missing_info:
+            primary_missing = missing_info[0]
+            
+            # Map missing info to user options
+            if "khu vực" in primary_missing.lower() or "thành phố" in primary_missing.lower() or "ở đâu" in primary_missing.lower():
+                title = "Chọn khu vực bạn muốn đi chơi:"
+                options = ["Tây Hồ, Hà Nội", "Hoàn Kiếm, Hà Nội", "Cầu Giấy, Hà Nội"]
+            elif "trải nghiệm" in primary_missing.lower() or "kiểu" in primary_missing.lower():
+                title = "Chọn kiểu trải nghiệm bạn muốn:"
+                options = ["Cafe chill & sống ảo", "Ăn uống ẩm thực", "Vui chơi & hoạt động nhóm"]
+            else:
+                title = f"Vui lòng chọn một lựa chọn nhanh hoặc nhập tự chọn ở khung chat:"
+                options = ["Tây Hồ, Hà Nội", "Cafe & Ăn uống", "Hoạt động ngoài trời"]
+                
+            st.markdown(f"""
+            <div style="background-color: #f0f4f8; padding: 15px; border-radius: 8px; border-left: 5px solid #2b5c8f; margin-bottom: 15px;">
+                <p style="margin: 0; font-weight: bold; color: #2b5c8f;">💡 Trả lời nhanh cho Bot:</p>
+                <p style="margin: 5px 0 10px 0; font-size: 0.95em;">Bot đang thiếu thông tin: <b>{primary_missing}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
+            st.write(f"*{title}*")
+            
+            cols = st.columns(3)
+            for idx, opt in enumerate(options):
+                with cols[idx]:
+                    if st.button(opt, key=f"quick_reply_{idx}", use_container_width=True):
+                        submit_user_message(opt)
+            st.write("---")
+            
+    # Main chat input block
+    if go_next:
+        user_query = st.chat_input("Nhập yêu cầu tìm quán cafe, chỗ ăn uống hay vui chơi, hoặc nhập câu trả lời của bạn...")
+        if user_query:
+            submit_user_message(user_query)
     else:
-        st.info("Chưa có tọa độ GPS hợp lệ để hiển thị bản đồ.")
+        st.success("🎉 Bạn đã quyết định chốt lịch trình này! Hãy tải lịch (.ics) từ sidebar hoặc xem sơ đồ bên dưới.")
+        
+    # Display recommended locations as interactive cards (if any are available)
+    if agent.last_recommendations and go_next:
+        st.subheader("📍 Địa điểm được đề xuất dựa trên đánh giá:")
+        
+        for idx, place in enumerate(agent.last_recommendations[:5]):
+            with st.container():
+                st.markdown(f"""
+                <div class="recommendation-card">
+                    <h3>{idx+1}. {place.get('title')} ({place.get('type') or 'Địa điểm'})</h3>
+                    <p><b>Địa chỉ:</b> {place.get('address')}</p>
+                    <p><b>Rating:</b> ⭐ {place.get('rating')} | <b>Score:</b> {place.get('score')} | <b>Giá:</b> {place.get('price') or 'Chưa rõ'}</p>
+                    <p><i>{place.get('general_comment') or ''}</i></p>
+                </div>
+                """, unsafe_allowed_html=True)
+                
+                # Action button to add to plan
+                if st.button(f"Thêm {place.get('title')} vào Kế hoạch", key=f"add_{idx}"):
+                    agent.add_to_plan({
+                        "title": place.get("title"),
+                        "address": place.get("address"),
+                        "rating": place.get("rating"),
+                        "type": place.get("type"),
+                        "gps": place.get("gps"),
+                        "data_id": place.get("data_id")
+                    })
+                    st.success(f"Đã thêm {place.get('title')}!")
+                    st.rerun()
