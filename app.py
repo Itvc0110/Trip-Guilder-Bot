@@ -185,6 +185,8 @@ with cols[3]:
 
 st.write("---")
 
+agent = st.session_state.agent
+
 # Split workspace layout into Left (Google Map & Actions) and Right (Chatbot) based on show_map toggle
 if show_map:
     col_left, col_right = st.columns([4, 5])

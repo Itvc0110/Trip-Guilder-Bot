@@ -60,7 +60,11 @@ class RequestForm:
     missing_required: list[str]
 
 
-def run_placeholder_tools(route: dict[str, Any], user_request: str) -> list[dict[str, Any]]:
+def run_placeholder_tools(
+    route: dict[str, Any],
+    user_request: str,
+    conversation_context: str = "",
+) -> list[dict[str, Any]]:
     """Run DiChoiBot's place/review/filter pipeline.
 
     If router returns `plan`, run the canonical pipeline regardless of aliases in
@@ -70,7 +74,7 @@ def run_placeholder_tools(route: dict[str, Any], user_request: str) -> list[dict
         return []
 
     findings: list[dict[str, Any]] = []
-    request_form = build_request_form(user_request)
+    request_form = build_request_form(user_request, conversation_context)
     findings.append(
         {
             "tool_name": "request_form",
@@ -121,18 +125,46 @@ def get_tool(tool_name: str) -> ToolFn | None:
     return TOOL_REGISTRY.get(tool_name)
 
 
-def build_request_form(user_request: str) -> RequestForm:
-    """Extract a tool-ready form from the user's natural-language request.
+def build_request_form(user_request: str, conversation_context: str = "") -> RequestForm:
+    """Extract a tool-ready form from the user's request, incorporating past context.
 
     Required for search: place_type + location. Preferences/constraints are used
     for filter/personalization and should not block tool search.
     """
     text = normalize_text(user_request)
+    context_text = normalize_text(conversation_context)
+
+    # 1. Extract place_type: try current, fallback to history context
     place_type = extract_place_type(text)
+    if not place_type and context_text:
+        place_type = extract_place_type(context_text)
+
+    # 2. Extract location: try current, fallback to history context
     location = extract_location(text)
+    if not location and context_text:
+        location = extract_location(context_text)
+
+    # 3. Extract preferences, constraints, optional context
     preferences = extract_terms(text, PREFERENCE_TERMS)
     constraints = extract_terms(text, CONSTRAINT_TERMS)
     optional_context = extract_terms(text, OPTIONAL_CONTEXT_TERMS)
+
+    # Merge preferences, constraints, optional context from history if not present
+    if context_text:
+        ctx_prefs = extract_terms(context_text, PREFERENCE_TERMS)
+        for p in ctx_prefs:
+            if p not in preferences:
+                preferences.append(p)
+
+        ctx_consts = extract_terms(context_text, CONSTRAINT_TERMS)
+        for c in ctx_consts:
+            if c not in constraints:
+                constraints.append(c)
+
+        ctx_opts = extract_terms(context_text, OPTIONAL_CONTEXT_TERMS)
+        for o in ctx_opts:
+            if o not in optional_context:
+                optional_context.append(o)
 
     missing_required = []
     if not place_type:
