@@ -10,7 +10,7 @@ TOOL_SCHEMAS = [
         "parameters": ["query"],
     },
     {
-        "name": "search_reviews",
+        "name": "review_search",
         "description": "Đọc review của một địa điểm, ưu tiên data_id từ search_places.",
         "parameters": ["place_result"],
     },

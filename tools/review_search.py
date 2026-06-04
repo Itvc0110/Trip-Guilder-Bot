@@ -266,6 +266,27 @@ def get_place_reviews(
     )
 
 
+def get_reviews_for_places(
+    places: list[dict[str, Any]],
+    max_best_per_place: int = DEFAULT_MAX_HIGH,
+    max_worst_per_place: int = DEFAULT_MAX_LOW,
+) -> list[dict[str, Any]]:
+    """Backward-compatible batch alias used by older tests."""
+    results = search_reviews_for_places(
+        places,
+        max_high=max_best_per_place,
+        max_low=max_worst_per_place,
+    )
+    for result in results:
+        result.setdefault("place_title", result.get("place_name"))
+    return results
+
+
+def review_search(place: dict[str, Any]) -> dict[str, Any]:
+    """Backward-compatible alias for registry imports."""
+    return search_reviews(place)
+
+
 # ---------------------------------------------------------------------------
 # Internal: gọi SerpAPI một chiều (ratingHigh hoặc ratingLow)
 # ---------------------------------------------------------------------------

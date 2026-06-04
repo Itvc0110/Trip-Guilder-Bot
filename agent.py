@@ -240,13 +240,11 @@ Trả về JSON với các trường:
                 temperature=0.2,
             )
         except OpenRouterError as exc:
+            fallback = local_demo_answer(user_request, route, tool_findings, conversation_context)
             return (
-                "## Tóm Tắt Nhu Cầu\n"
-                "Không thể gọi planning model.\n\n"
-                "## Kết Quả Từ Công Cụ\n"
-                f"- Trạng thái API: {exc}\n\n"
-                "## Câu Hỏi Theo Dõi\n"
-                "- Vui lòng kiểm tra OpenRouter API key rồi thử lại."
+                f"{fallback.rstrip()}\n\n"
+                "## Trạng Thái Model\n"
+                f"- Planning model không khả dụng nên đã dùng local fallback: {exc}\n"
             )
 
     def _review_answer(
