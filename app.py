@@ -89,6 +89,9 @@ with st.sidebar:
         st.rerun()
 
     st.write("---")
+    st.subheader("⚙️ Cấu hình hiển thị")
+    show_map = st.checkbox("🗺️ Bật Bản đồ & Tương tác", value=True)
+    st.write("---")
 
     # HangOut Plan Framework Tracker
     st.subheader("📋 HangOut Plan Framework")
@@ -182,91 +185,107 @@ with cols[3]:
 
 st.write("---")
 
-# Split workspace layout into Left (Google Map & Actions) and Right (Chatbot)
-col_left, col_right = st.columns([4, 5])
+# Split workspace layout into Left (Google Map & Actions) and Right (Chatbot) based on show_map toggle
+if show_map:
+    col_left, col_right = st.columns([4, 5])
+else:
+    col_left = None
+    col_right = st.container()
 
 # LEFT COLUMN: Google Map Panel & Location Interactions
-with col_left:
-    st.subheader("🗺️ Bản đồ & Tương tác vị trí")
-    
-    # Compile options for map center selection
-    map_options = ["Mặc định (Hà Nội)"]
-    if area:
-        map_options[0] = f"Mặc định ({area})"
+if col_left:
+    with col_left:
+        st.subheader("🗺️ Bản đồ & Tương tác vị trí")
         
-    for item in plan:
-        map_options.append(f"Plan: {item.get('title')} ({item.get('address')})")
-        
-    for item in agent.last_recommendations[:5]:
-        map_options.append(f"Đề xuất: {item.get('title')} ({item.get('address')})")
-        
-    selected_map_opt = st.selectbox(
-        "Chọn địa điểm để xem trên bản đồ:",
-        options=map_options,
-        index=0,
-        key="map_center_selectbox"
-    )
-    
-    # Parse selected address/query
-    if selected_map_opt.startswith("Mặc định"):
-        default_q = area if area else "Hà Nội"
-        map_query = default_q
-    elif selected_map_opt.startswith("Plan: "):
-        map_query = selected_map_opt[len("Plan: "):].split(" (")[0]
-    elif selected_map_opt.startswith("Đề xuất: "):
-        map_query = selected_map_opt[len("Đề xuất: "):].split(" (")[0]
-    else:
-        map_query = selected_map_opt
-        
-    # Input box to customize or refine search on map
-    map_search = st.text_input(
-        "Tìm kiếm / Tinh chỉnh vị trí trên bản đồ:",
-        value=map_query,
-        key="map_search_input"
-    )
-    
-    # Embed the Google Map iframe
-    import urllib.parse
-    encoded_search = urllib.parse.quote(map_search)
-    embed_url = f"https://maps.google.com/maps?q={encoded_search}&t=&z=15&ie=UTF8&iwloc=&output=embed"
-    
-    st.components.v1.iframe(embed_url, height=450)
-    
-    # Map actions triggers
-    st.markdown("##### ⚡ Tương tác vị trí với Chatbot:")
-    st.write("Yêu cầu chatbot thực hiện tác vụ liên quan đến vị trí trên bản đồ:")
-    
-    col_act1, col_act2 = st.columns(2)
-    with col_act1:
-        if st.button("🔍 Đánh giá địa điểm này", use_container_width=True, key="btn_review_map"):
-            submit_user_message(f"Đọc review và đánh giá chi tiết quán: {map_search}")
-    with col_act2:
-        if st.button("📍 Tìm địa điểm xung quanh", use_container_width=True, key="btn_around_map"):
-            submit_user_message(f"Gợi ý các địa điểm ăn uống, cafe hoặc vui chơi xung quanh: {map_search}")
+        # Compile options for map center selection
+        map_options = ["Mặc định (Hà Nội)"]
+        if area:
+            map_options[0] = f"Mặc định ({area})"
             
-    st.write("---")
-    
-    # Show active plan route map at the bottom of the left column
-    if plan:
-        st.subheader("📍 Lộ trình các điểm đã chọn:")
-        map_data = []
-        for loc in plan:
-            gps = loc.get("gps")
-            if gps and isinstance(gps, dict):
-                lat = gps.get("latitude") or gps.get("lat")
-                lon = gps.get("longitude") or gps.get("lng")
-                if lat and lon:
-                    map_data.append({
-                        "latitude": float(lat),
-                        "longitude": float(lon),
-                        "title": loc.get("title")
-                    })
-                    
-        if map_data:
-            df = pd.DataFrame(map_data)
-            st.map(df)
+        for item in plan:
+            map_options.append(f"Plan: {item.get('title')} ({item.get('address')})")
+            
+        for item in agent.last_recommendations[:5]:
+            map_options.append(f"Đề xuất: {item.get('title')} ({item.get('address')})")
+            
+        selected_map_opt = st.selectbox(
+            "Chọn địa điểm để xem trên bản đồ:",
+            options=map_options,
+            index=0,
+            key="map_center_selectbox"
+        )
+        
+        # Parse selected address/query
+        if selected_map_opt.startswith("Mặc định"):
+            default_q = area if area else "Hà Nội"
+            map_query = default_q
+        elif selected_map_opt.startswith("Plan: "):
+            map_query = selected_map_opt[len("Plan: "):].split(" (")[0]
+        elif selected_map_opt.startswith("Đề xuất: "):
+            map_query = selected_map_opt[len("Đề xuất: "):].split(" (")[0]
         else:
-            st.info("Chưa có tọa độ GPS để hiển thị lộ trình.")
+            map_query = selected_map_opt
+            
+        # Input box to customize or refine search on map
+        map_search = st.text_input(
+            "Tìm kiếm / Tinh chỉnh vị trí trên bản đồ:",
+            value=map_query,
+            key="map_search_input"
+        )
+        
+        # Embed the Google Map iframe
+        import urllib.parse
+        encoded_search = urllib.parse.quote(map_search)
+        embed_url = f"https://maps.google.com/maps?q={encoded_search}&t=&z=15&ie=UTF8&iwloc=&output=embed"
+        
+        st.components.v1.iframe(embed_url, height=450)
+        
+        # Map actions triggers
+        st.markdown("##### ⚡ Tương tác vị trí với Chatbot:")
+        st.write("Yêu cầu chatbot thực hiện tác vụ liên quan đến vị trí trên bản đồ:")
+        
+        col_act1, col_act2, col_act3 = st.columns(3)
+        with col_act1:
+            if st.button("🔍 Đánh giá", use_container_width=True, key="btn_review_map"):
+                submit_user_message(f"Đọc review và đánh giá chi tiết quán: {map_search}")
+        with col_act2:
+            if st.button("📍 Xung quanh", use_container_width=True, key="btn_around_map"):
+                submit_user_message(f"Gợi ý các địa điểm ăn uống, cafe hoặc vui chơi xung quanh: {map_search}")
+        with col_act3:
+            if st.button("➕ Thêm vào Plan", use_container_width=True, key="btn_add_direct_map"):
+                agent.add_to_plan({
+                    "title": map_search,
+                    "address": "Địa điểm tự chọn từ bản đồ",
+                    "rating": "N/A",
+                    "type": "Tự chọn",
+                    "gps": None
+                })
+                st.success(f"Đã thêm {map_search} vào kế hoạch!")
+                st.rerun()
+                
+        st.write("---")
+        
+        # Show active plan route map at the bottom of the left column
+        if plan:
+            st.subheader("📍 Lộ trình các điểm đã chọn:")
+            map_data = []
+            for loc in plan:
+                gps = loc.get("gps")
+                if gps and isinstance(gps, dict):
+                    lat = gps.get("latitude") or gps.get("lat")
+                    lon = gps.get("longitude") or gps.get("lng")
+                    if lat and lon:
+                        map_data.append({
+                            "latitude": float(lat),
+                            "longitude": float(lon),
+                            "title": loc.get("title")
+                        })
+                        
+            if map_data:
+                df = pd.DataFrame(map_data)
+                st.map(df)
+            else:
+                st.info("Chưa có tọa độ GPS để hiển thị lộ trình.")
 
 # RIGHT COLUMN: Chatbot Conversation & Recommendations
 with col_right:
