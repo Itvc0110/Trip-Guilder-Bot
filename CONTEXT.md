@@ -1,47 +1,44 @@
-# Context: Trip-Guilder-Bot (AI Weekend Planner)
+# Context: Trip-Guilder-Bot (AI Weekend Planner cho Cặp đôi)
 
-This document serves as the **Quality Context and Developer Guide** for **CODEX** (or any agentic AI developer). It outlines the core philosophy of building AI products under uncertainty derived from [HACKATHON_REQUIREMENTS.md](HACKATHON_REQUIREMENTS.md), specifies the product design for the **Trip-Guilder-Bot** (AI Weekend Planner) based on Group 3's [evidence-pack-template.md](02-group-spec/evidence-pack-template.md), [thin-spec-template.md](02-group-spec/thin-spec-template.md), and [synthesis-decide-toolkit.md](02-group-spec/synthesis-decide-toolkit.md), and defines the system architecture, 4 UX paths, and implementation milestones.
+Tài liệu này đóng vai trò làm **Bản Hướng dẫn Chất lượng & Lập trình (Quality Context & Developer Guide)** cho **CODEX** (hoặc bất kỳ AI agent nào). Tài liệu phác thảo triết lý xây dựng ứng dụng AI trong môi trường không chắc chắn, thông số sản phẩm dành cho **Trip-Guilder-Bot**, kiến trúc hệ thống, 4 UX paths, và các cột mốc triển khai (milestones).
 
 ---
 
 ## 📖 1. Core Philosophy: Designing AI Products for Uncertainty
 
-AI applications differ from traditional software. Software is deterministic, whereas AI is **probabilistic** (exhibits variance, errors, and context sensitivity). Developing an AI product is about **risk management, error routing, and creating feedback loops**.
+Ứng dụng AI khác với phần mềm truyền thống ở tính **xác suất** (probabilistic) thay vì quyết định luận (deterministic). Phát triển sản phẩm AI thực chất là **quản lý rủi ro, phân luồng lỗi (error routing), và tạo vòng lặp phản hồi (feedback loops)**.
 
-### 1.1 The Three Layers of Uncertainty
-1. **Input Uncertainty**: Users write vague or incomplete queries (e.g., *"lập lịch trình đi chơi cuối tuần"* - lacking duration, child friendly constraints, vehicle details, etc.).
-2. **Process Uncertainty**: The agent or system may interpret instructions incorrectly, use tools with errors, or face context length limitations.
-3. **Output Uncertainty**: The model might hallucinate, suggest outdated info (e.g., closed restaurants), or present incorrect travel routes with high confidence.
+### 1.1 Ba tầng không chắc chắn (Three Layers of Uncertainty)
+1. **Input Uncertainty**: Người dùng nhập các yêu cầu mơ hồ hoặc thiếu thông tin (ví dụ: *"hẹn hò cuối tuần"* - thiếu vibe, ngân sách, phương tiện, thời gian).
+2. **Process Uncertainty**: Agent diễn dịch sai yêu cầu, gọi công cụ (tool) gặp lỗi, hoặc bị giới hạn ngữ cảnh (context window).
+3. **Output Uncertainty**: Mô hình bị ảo ảnh (hallucination), gợi ý địa điểm đã đóng cửa, hoặc đề xuất quán quá đông đúc làm hỏng không khí hẹn hò riêng tư.
 
-### 1.2 Error Routing Lifecycle: Detect → Route → Recover → Learn
-*   **Detect**: Detect low-confidence inputs (e.g., vague prompts) or execution failures (e.g., API errors, missing locations).
-*   **Route**: Reroute execution to a safe path (e.g., query clarification prompts, display fallback templates, escalate to human choice).
-*   **Recover**: Give users intuitive mechanisms to recover from errors (e.g., drag-and-drop itinerary correction, manual text editing, choosing alternative places).
-*   **Learn**: Collect user interactions as learning signals (e.g., logging corrections, tracking approval rates, saving selected options) to continuously improve prompts and datasets.
+### 1.2 Vòng đời xử lý lỗi: Detect → Route → Recover → Learn
+*   **Detect**: Phát hiện đầu vào có độ tự tin thấp (vague prompt) hoặc lỗi thực thi công cụ (API error, database empty).
+*   **Route**: Chuyển hướng xử lý sang luồng an toàn (Clarification prompt, fallback template, hiển thị UI lựa chọn thay thế).
+*   **Recover**: Cung cấp công cụ trực quan để người dùng khôi phục và chỉnh sửa (kéo thả thay đổi giờ, nút đổi địa điểm cùng vibe).
+*   **Learn**: Thu thập hành động chỉnh sửa của người dùng thành tín hiệu học máy (ghi log console dạng JSON) để liên tục cải tiến hệ thống prompt và seed database.
 
 ### 1.3 Automation vs. Augmentation
-*   **Augmentation (Selected Path)**: AI draft or suggestion engine. The human remains in the loop as the reviewer, editor, and final decider. 
-    *   *Why?* Travel planning involves highly personal constraints (kid's mood, traffic, sudden weather changes). The cost of a bad automated booking is high, while the cost of rejecting a bad AI suggestion is low if the UX makes correction simple.
-*   **Agency Progression**: Start with Augmentation (V1 Suggestion & V2 Copilot) before attempting V3 (Automation) after collecting substantial real-use interaction data.
-
-### 1.4 Precision vs. Recall Tradeoff
-*   In travel planning, **Recall is prioritized** (finding a wide range of relevant spots to keep the itinerary exciting), provided the UX gives the user tools to filter and correct.
-*   For critical steps (e.g., adding to Calendar or calculating transit times), **Precision is prioritized** via structured confirmations.
+*   **Augmentation (Selected Path)**: AI đóng vai trò đề xuất lịch trình nháp. Người dùng là người duyệt, chỉnh sửa và quyết định cuối cùng.
+    *   *Tại sao?* Buổi hẹn hò của cặp đôi mang tính riêng tư cao. Một gợi ý không hợp vibe hoặc một quán quá đông đúc có thể phá hỏng cảm xúc cả ngày. Chi phí để người dùng chỉnh sửa/bác bỏ gợi ý của AI là cực kỳ thấp nếu UI/UX hỗ trợ kéo thả tiện lợi.
+*   **Agency Progression**: Bắt đầu bằng Augmentation (V1 Suggestion & V2 Copilot) trước khi nâng cấp lên V3 (Automation - tự động đặt chỗ) khi đã thu thập đủ dữ liệu tương tác thực tế.
 
 ---
 
 ## 🛠️ 2. Product Specification & Build Slice (AI Weekend Planner)
 
 ### 2.1 Target User & Pain Statement
-*   **Target User**: Parents with young children (3–10 years old) or groups of young friends, planning a weekend trip/outing in Hanoi.
-*   **Pain Statement (Grounded in Evidence)**: 
-    *   Google AI Overview returns static, short text lists (often only covering a single morning) with no interactive maps, zero calendar sync, and no check on user constraints (vehicle type, child-friendliness).
-    *   Users must copy-paste details across Google Search, Maps, Calendar, Notes, and messaging chats to plan and coordinate.
-*   **Analog Pattern (Inspiration)**: *Stippl AI Travel Planner* (converts inputs to timeline, integrates drag-drop reordering, maps, and calendar sync).
+*   **Target User**: Các cặp đôi tại Hà Nội (đang hẹn hò hoặc đã kết hôn, không dắt theo con nhỏ) đang lên kế hoạch đi chơi/hẹn hò cuối tuần.
+*   **Pain Statement (Grounded in Evidence)**:
+    *   Google AI Overview trả về văn bản lịch trình tĩnh và cực kỳ sơ sài, không có bản đồ di chuyển, không có lịch nhắc nhở, và không quan tâm đến vibe hẹn hò hay độ đông đúc của quán.
+    *   Người dùng phải liên tục nhảy qua lại giữa Google Search, Maps, Facebook/Tiktok review, Calendar và các app nhắn tin để bàn bạc và chốt lịch.
+    *   Cặp đôi sợ nhất cảnh đến nơi lãng mạn nhưng quán quá đông phải xếp hàng chờ đợi lâu.
+*   **Analog Pattern (Inspiration)**: *Stippl AI Travel Planner* (chuyển đổi text thành timeline trực quan, kéo thả reorder, đồng bộ maps & calendar).
 
 ### 2.2 The Build Slice (Hackathon Scope)
-The prototype must showcase a focused slice showing the end-to-end loop:
-> **User inputs weekend trip criteria** $\rightarrow$ **AI generates structured timeline** $\rightarrow$ **Interactive map displays places** $\rightarrow$ **User can drag-and-drop to reorder or edit times** $\rightarrow$ **User can export/mock sync to Calendar** $\rightarrow$ **App logs user corrections to console**.
+MVP prototype tập trung vào vòng lặp khép kín:
+> **User nhập tiêu chí hẹn hò** $\rightarrow$ **ReAct Agent (DeepSeek-v4-flash) gọi Tools tạo timeline chi tiết kèm chỉ số độ đông đúc (crowd level)** $\rightarrow$ **Bản đồ tương tác hiển thị markers vị trí** $\rightarrow$ **User kéo thả để đổi giờ hoặc xóa/đổi điểm** $\rightarrow$ **Xuất lịch hẹn hò (.ics)** $\rightarrow$ **Hệ thống in event log JSON ra console**.
 
 ---
 
@@ -49,40 +46,42 @@ The prototype must showcase a focused slice showing the end-to-end loop:
 
 | Path | Scenario | System UX Response |
 | :--- | :--- | :--- |
-| **1. Happy Path** | User inputs complete query (e.g., *“Gia đình 4 người, trẻ 7 tuổi, xuất phát Hà Nội, thích thiên nhiên, 2 ngày, ô tô”*). | AI generates a clean, structured timeline with hours. Places display on the map iframe. "Add to Google Calendar" button is active. |
-| **2. Low‑Confidence Path** | User inputs vague query (e.g., *“Đi chơi cuối tuần đi”* or *“Đi đâu cũng được”*). | AI detects ambiguity. Instead of guessing, it displays a clarification wizard with 3 choice buttons: *(1) Outdoor/Nature, (2) Indoor/Entertainment, (3) Cafe/Food Tour*. |
-| **3. Failure Path** | User inputs an unavailable/extremely niche preference (e.g., *“xem chim hoàng yến trong công viên”*). | AI returns a graceful message: *"Rất tiếc, chưa tìm thấy địa điểm phù hợp. Bạn có muốn thử các địa điểm thiên nhiên ngoài trời nổi bật tại Hà Nội không?"* and displays 3 fallback suggestions: **Công viên Thống Nhất, Hồ Tây, Vườn bách thú**. |
-| **4. Correction Path** | User changes dates, deletes a spot, or reorders the schedule. | App updates the timeline immediately, updates the map view, recalculates travel slots, and prints a structured JSON correction log in the browser console. |
+| **1. Happy Path** | User nhập đầy đủ thông tin (e.g., *“Cặp đôi, vibe lãng mạn riêng tư, đi chiều tối thứ 7, xe máy”*). | Agent gọi `get_favourable_place` truy vấn SQLite seed DB & API, trả về lịch trình 3 điểm kèm giờ di chuyển, hiển thị lượng người dự kiến (để tránh quá đông), vẽ sơ đồ lên bản đồ, nút xuất Calendar hoạt động. |
+| **2. Low‑Confidence Path** | User nhập mơ hồ (e.g., *“đi hẹn hò đi”*, *“đi đâu cũng được”*). | Agent nhận diện độ tự tin thấp. Hệ thống hiển thị Clarification UI gồm 3 nút chọn vibe: *(1) Lãng mạn & Riêng tư, (2) Năng động & Trải nghiệm mới, (3) Ẩm thực & Phố xá*. |
+| **3. Failure Path** | User nhập yêu cầu không tồn tại/dị biệt (e.g., *“đi uống cafe ngắm khủng long bay ở Hà Nội”*). | Agent phản hồi tế nhị: *"Không tìm thấy địa điểm phù hợp."* và kích hoạt fallback hiển thị 3 địa điểm hẹn hò lãng mạn kinh điển: **Hồ Tây, Cầu Long Biên, Cafe Yên**. |
+| **4. Correction Path** | User kéo thả thẻ thay đổi thứ tự hoạt động hoặc bấm nút xóa/thay thế địa điểm. | Hệ thống tự động tính toán lại thời gian di chuyển trên timeline, vẽ lại đường đi trên bản đồ, và in sự kiện chỉnh sửa dạng JSON ra console của trình duyệt. |
 
 ---
 
 ## 🏗️ 4. System Architecture & Data Schema
 
 ### 4.1 Technology Stack
-1.  **Frontend**: Vanilla HTML5, Vanilla JavaScript (ES6+), and Premium Vanilla CSS.
-    *   *Design Aesthetics*: Harmonious dark/light theme, modern typography (Google Fonts Outfit or Inter), smooth micro-animations, glassmorphism card styling, responsive design. **Absolutely no basic or ugly UI templates.**
-2.  **AI Engine Mock / Local Prompt Runner**:
-    *   Uses a client-side mock LLM database mapping typical query combinations to structured JSON responses, or hooks to a simple local API.
-    *   Outputs structured JSON containing: name, coordinates, description, time window, child-friendly score, fallback places.
-3.  **Google Maps Mock Integration**:
-    *   Embedded responsive iframe map (Google Maps Embed API or Leaflet JS Map with coordinates) pointing to the suggested locations.
-4.  **Google Calendar Integration**:
-    *   Export feature: Generates a `.ics` file for download, or opens a mock Google Calendar page pre-filled with the itinerary details.
+1.  **Frontend**: React / Next.js, Premium Vanilla CSS.
+    *   *Design Aesthetics*: Sử dụng tông màu lãng mạn (pastel, dark mode sang trọng, rose/gold accents), font chữ Outfít hoặc Inter, các micro-animations mượt mà, thiết kế dạng card kính mờ (glassmorphism). Không sử dụng các layout thô sơ mặc định của trình duyệt.
+2.  **Backend & AI Engine**:
+    *   FastAPI Backend đóng vai trò API Gateway.
+    *   **LangGraph ReAct Agent** kết hợp mô hình **DeepSeek-v4-flash** làm bộ não điều hành, thực thi hội thoại và gọi Tools.
+3.  **Database & Live API Integration**:
+    *   **SQLite** lưu seed data ~80 địa điểm hẹn hò tuyển chọn (Hanoi spots).
+    *   Tích hợp live API Google Maps (lấy địa chỉ, trạng thái mở cửa, hình ảnh) và Google Search làm fallback làm phong phú thông tin.
+    *   Chỉ số **Crowd Avoidance**: Thống kê số lượng user lập kế hoạch check-in cùng khung giờ trên hệ thống.
+4.  **Calendar Integration**:
+    *   Xuất file `.ics` chuẩn để người dùng nạp trực tiếp vào Apple Calendar / Google Calendar.
 
 ### 4.2 Learning Loop Event Log Schema
-Every edit, drag-and-drop, delete, or fallback trigger must output a log to the developer console in this format:
+Mỗi khi user thay đổi timeline (kéo thả, xóa, thay điểm), frontend gửi log JSON sau về backend và in ra console:
 ```json
 {
-  "timestamp": "2026-06-03T16:50:00Z",
-  "event_type": "itinerary_reordered | spot_deleted | spot_edited | fallback_triggered",
+  "timestamp": "2026-06-04T09:40:00Z",
+  "event_type": "itinerary_reordered | spot_deleted | spot_replaced | fallback_triggered",
   "data": {
-    "spot_id": "zoo_hanoi",
-    "old_time_slot": "09:00 - 11:00",
-    "new_time_slot": "10:00 - 12:00",
+    "spot_id": "cafe_yen_giang_vo",
+    "old_time_slot": "15:00 - 17:00",
+    "new_time_slot": "16:00 - 18:00",
     "reason_if_any": "user_drag_drop",
     "user_context": {
-      "has_kids": true,
-      "num_people": 4
+      "vibe": "cozy_and_quiet",
+      "num_people": 2
     }
   }
 }
@@ -92,33 +91,30 @@ Every edit, drag-and-drop, delete, or fallback trigger must output a log to the 
 
 ## 🎯 5. System Design Milestones & Definition of Done (DoD)
 
-CODEX must implement and check the following milestones sequentially:
+### Milestone 1: Setup Dự án, Layout & Design System
+*   [ ] Khởi tạo khung dự án Next.js kết hợp FastAPI backend.
+*   [ ] Thiết lập Design System lãng mạn trong CSS (Outfít font, gradients mềm mại, glassmorphism cards).
+*   *DoD Check*: UI đẹp mắt, responsive, các nút hover có micro-animations mượt mà.
 
-### Milestone 1: Project Setup, Layout & Design System
-*   [ ] Configure project structure: `index.html`, `index.css`, `app.js`, and `data.js` (mock database).
-*   [ ] Build the design system in `index.css` featuring curated palettes (e.g. HSL tailored styles), Outfit font, card styling, and hover transition scales.
-*   *DoD Check*: UI matches modern web aesthetics (no default browser elements, custom scrollbars, cohesive colors).
+### Milestone 2: Phát triển ReAct Agent & 4 Tools (Milestone 2 & 3 gộp)
+*   [ ] Xây dựng LangGraph ReAct agent sử dụng DeepSeek-v4-flash.
+*   [ ] Hiện thực hóa 4 Tools: `get_new_experience`, `get_favourable_place`, `get_current_trend`, `map_and_export_trip`.
+*   [ ] Setup SQLite seed database với các bảng điểm hẹn hò tuyển chọn tại Hà Nội.
+*   *DoD Check*: Agent gọi đúng các Tool lọc dữ liệu dựa trên vibe yêu cầu của user và trả về JSON lịch trình có cấu trúc.
 
-### Milestone 2: Clarification Wizard & Low-Confidence Flow (Path 2)
-*   [ ] Implement input field and query classification logic.
-*   [ ] Build the interactive clarification UI that triggers when input length is low or keywords are missing.
-*   *DoD Check*: Entering *"đi chơi đi"* correctly displays the 3 multiple-choice options.
+### Milestone 3: Bản đồ Tương tác & Tránh Đông đúc (Path 1 & 3)
+*   [ ] Tích hợp Leaflet JS hoặc Google Maps iframe vẽ lộ trình di chuyển.
+*   [ ] Hiển thị thông số lượng người dự kiến (crowd level) trên thẻ lịch trình.
+*   [ ] Thực thi Path 3 (Failure Fallback): Khi không có điểm phù hợp, hiển thị 3 điểm hẹn hò kinh điển.
+*   *DoD Check*: Tìm kiếm lãng mạn ra đúng bản đồ marker + timeline chi tiết; tìm kiếm dị biệt kích hoạt fallback gợi ý 3 điểm.
 
-### Milestone 3: Itinerary Generator & Maps Mock (Path 1 & 3)
-*   [ ] Integrate mock database lookup (or LLM call) matching input parameters (activities, child ages) to structured itineraries.
-*   [ ] Display the generated timeline in an interactive schedule board (hour-by-hour cards with badges).
-*   [ ] Integrate the Leaflet.js or Google Maps iframe showing markers for the itinerary locations.
-*   [ ] Implement Path 3 (Failure Mode): Triggering a niche request fallback shows the default 3 outdoor spots.
-*   *DoD Check*: Happy path query yields structured cards + marker map; niche query yields fallback suggestions gracefully.
+### Milestone 4: Kéo thả Timeline & Ghi nhận Log (Path 4)
+*   [ ] Hiện thực hóa tương tác kéo thả reorder các thẻ timeline hoạt động của cặp đôi.
+*   [ ] Tự động tính toán lại khoảng thời gian rảnh/giờ di chuyển khi timeline thay đổi.
+*   [ ] Bắn event log JSON ra Console của trình duyệt theo đúng schema ở Section 4.2.
+*   *DoD Check*: Kéo thả swap vị trí cafe và ăn tối lập tức cập nhật lại thứ tự di chuyển và in ra JSON log chuẩn xác.
 
-### Milestone 4: Drag-and-Drop / Timeline Correction (Path 4)
-*   [ ] Add drag-and-drop HTML5 API support to reorder cards on the timeline, or provide simple Up/Down edit buttons.
-*   [ ] Automatically recalculate schedule hours when cards are reordered or a card is deleted.
-*   [ ] Wire up console logging for every reorder action according to the event log schema in Section 4.2.
-*   *DoD Check*: Dragging an afternoon spot to the morning swaps their hours, updates the map sequence, and logs the change to the console.
-
-### Milestone 5: Google Calendar Sync & Final QA
-*   [ ] Implement the export functionality: generate a valid `.ics` file containing the events, or build a mock "Add to Google Calendar" pre-filled event link generator.
-*   [ ] Run manual end-to-end tests for all 4 paths.
-*   [ ] Ensure mobile responsiveness.
-*   *DoD Check*: Clicking the calendar button prompts a calendar file download or opens the pre-filled mock calendar link.
+### Milestone 5: Kết xuất Calendar & QA cuối cùng
+*   [ ] Hiện thực hóa nút xuất Calendar sinh file `.ics` tải xuống trực tiếp.
+*   [ ] Chạy thử nghiệm toàn bộ 4 Paths và kiểm tra giao diện trên mobile.
+*   *DoD Check*: File `.ics` tải xuống thành công, import vào Google/Apple Calendar hiển thị đúng giờ và tên địa điểm hẹn hò.
