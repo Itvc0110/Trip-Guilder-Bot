@@ -1,67 +1,34 @@
-"""
-tools/search_places.py
-======================
-Tool: search_places
+"""Tool search_places.
 
-Tìm kiếm địa điểm (nhà hàng, cafe, khách sạn, điểm tham quan, ...)
-trên Google Maps thông qua SerpAPI.
+Mục đích: tìm địa điểm trên Google Maps giống như khi người dùng gõ một câu vào
+ô search bar, ví dụ "quán phở ngon gần Hồ Gươm" hoặc "bảo tàng phù hợp trẻ em ở
+Hà Nội".
 
-Nguồn dữ liệu : SerpAPI — Google Maps engine (type=search)
-Quota          : 1 SerpAPI call / lần gọi
-Giới hạn kết quả : tối đa 6 địa điểm mỗi lần tìm kiếm
+Input duy nhất:
+- query: str
 
-Tham số tool cho Claude
------------------------
-query : str
-    Từ khóa tìm kiếm. Nên bao gồm loại hình và khu vực,
-    ví dụ: "phở bò Hoàn Kiếm", "cafe view đẹp Tây Hồ".
-lat   : float
-    Vĩ độ trung tâm vùng tìm kiếm.
-lng   : float
-    Kinh độ trung tâm vùng tìm kiếm.
-zoom  : int, optional
-    Mức zoom bản đồ (12–16). Zoom thấp = vùng rộng hơn.
-    Mặc định: 14.
-
-Trả về
-------
-dict
-    {"places": List[PlaceItem]} nếu thành công.
-    {"error": str}              nếu thất bại.
-
-    PlaceItem gồm:
-        title      : tên địa điểm
-        address    : địa chỉ đầy đủ
-        rating     : điểm đánh giá (float, 1.0–5.0)
-        reviews    : số lượng đánh giá (int)
-        price      : mức giá ("$", "$$", "$$$", "$$$$")
-        type       : loại hình (str)
-        open_state : trạng thái mở cửa ("Open", "Closed", ...)
-        phone      : số điện thoại
-        data_id    : ID dùng cho get_place_details
-        gps        : {"latitude": float, "longitude": float}
-
-Ví dụ
------
->>> result = search_places(
-...     query="phở bò Hoàn Kiếm",
-...     lat=21.0285,
-...     lng=105.8542,
-... )
->>> result["places"][0]["title"]
-'Phở Thìn'
+Tool dùng SerpAPI Google Maps engine nếu có `SERPAPI_API_KEY` trong môi trường.
+Nếu chưa có key hoặc API lỗi, tool trả kết quả có cấu trúc và nói rõ trạng thái,
+không bịa dữ liệu.
 """
 
-import httpx
+from __future__ import annotations
+
+import os
+from typing import Any
+
+import requests
 
 
-# Schema định nghĩa tool cho Anthropic API
+SERPAPI_URL = "https://serpapi.com/search"
+DEFAULT_MAX_RESULTS = 6
+
+
 TOOL_DEFINITION = {
     "name": "search_places",
     "description": (
         "Tìm nhà hàng, cafe, điểm tham quan, khách sạn hoặc bất kỳ địa điểm nào "
-        "trên Google Maps. Trả về danh sách địa điểm với tên, địa chỉ, rating, "
-        "giờ mở cửa và data_id để tra chi tiết."
+        "trên Google Maps bằng một chuỗi query giống ô tìm kiếm Google Maps."
     ),
     "input_schema": {
         "type": "object",
@@ -69,106 +36,110 @@ TOOL_DEFINITION = {
             "query": {
                 "type": "string",
                 "description": (
-                    "Từ khóa tìm kiếm, nên kèm khu vực. "
-                    "Ví dụ: 'phở bò Hoàn Kiếm', 'cafe Tây Hồ', 'bảo tàng Hà Nội'."
+                    "Câu tìm kiếm tự nhiên, nên gồm loại địa điểm và khu vực. "
+                    "Ví dụ: 'quán chay gần phố cổ Hà Nội', 'công viên cho trẻ em ở Hà Nội'."
                 ),
             },
-            "lat": {
-                "type": "number",
-                "description": "Vĩ độ trung tâm vùng tìm kiếm.",
-            },
-            "lng": {
-                "type": "number",
-                "description": "Kinh độ trung tâm vùng tìm kiếm.",
-            },
-            "zoom": {
-                "type": "number",
-                "description": "Mức zoom bản đồ (12–16). Mặc định 14.",
-            },
         },
-        "required": ["query", "lat", "lng"],
+        "required": ["query"],
     },
 }
 
 
-def search_places(
-    query: str,
-    lat: float,
-    lng: float,
-    zoom: int = 14,
-    *,
-    api_key: str,
-    max_results: int = 6,
-    timeout: float = 15.0,
-) -> dict:
-    """Tìm kiếm địa điểm trên Google Maps qua SerpAPI.
+def search_places(query: str) -> dict[str, Any]:
+    """Tìm địa điểm trên Google Maps bằng đúng một chuỗi query.
 
     Parameters
     ----------
-    query : str
-        Từ khóa tìm kiếm (tên loại hình + khu vực).
-    lat : float
-        Vĩ độ trung tâm vùng tìm kiếm.
-    lng : float
-        Kinh độ trung tâm vùng tìm kiếm.
-    zoom : int, optional
-        Mức zoom bản đồ (12–16). Mặc định 14.
-    api_key : str
-        SerpAPI private key. Truyền qua keyword argument.
-    max_results : int, optional
-        Số kết quả tối đa trả về. Mặc định 6.
-    timeout : float, optional
-        Timeout HTTP tính bằng giây. Mặc định 15.0.
+    query:
+        Câu tìm kiếm tự nhiên, giống nội dung nhập vào search bar Google Maps.
 
     Returns
     -------
     dict
-        {"places": list[dict]} nếu thành công,
-        {"error": str} nếu thất bại.
-
-    Raises
-    ------
-    httpx.TimeoutException
-        Nếu SerpAPI không phản hồi trong thời gian timeout.
-    httpx.HTTPError
-        Nếu có lỗi kết nối mạng.
+        Kết quả chuẩn hóa gồm `tool_name`, `status`, `summary`, `places`,
+        `verified`.
     """
-    ll = f"@{lat},{lng},{zoom}z"
+    normalized_query = " ".join(str(query).split())
+    if not normalized_query:
+        return _error_result("Query rỗng. Cần một chuỗi tìm kiếm địa điểm.")
 
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            "https://serpapi.com/search",
+    api_key = os.getenv("SERPAPI_API_KEY", "").strip()
+    if not api_key or api_key == "optional_for_future_tools":
+        return {
+            "tool_name": "search_places",
+            "status": "unavailable",
+            "summary": "Chưa có SERPAPI_API_KEY nên chưa thể tìm Google Maps thật.",
+            "query": normalized_query,
+            "places": [],
+            "verified": False,
+        }
+
+    try:
+        response = requests.get(
+            SERPAPI_URL,
             params={
-                "engine":  "google_maps",
-                "q":       query,
-                "ll":      ll,
-                "type":    "search",
-                "hl":      "vi",
+                "engine": "google_maps",
+                "q": normalized_query,
+                "type": "search",
+                "hl": "vi",
                 "api_key": api_key,
             },
+            timeout=15,
         )
         response.raise_for_status()
+    except requests.RequestException as exc:
+        return _error_result(f"Lỗi khi gọi SerpAPI Google Maps: {exc}", normalized_query)
 
     data = response.json()
+    if data.get("error"):
+        return _error_result(str(data["error"]), normalized_query)
 
-    if "error" in data:
-        return {"error": data["error"]}
+    raw_places = data.get("local_results") or data.get("place_results") or []
+    if isinstance(raw_places, dict):
+        raw_places = [raw_places]
 
-    raw_places = data.get("local_results") or []
-    places = [
-        {
-            "title":      place.get("title"),
-            "address":    place.get("address"),
-            "rating":     place.get("rating"),
-            "reviews":    place.get("reviews"),
-            "price":      place.get("price"),
-            "type":       place.get("type"),
-            "open_state": place.get("open_state"),
-            "phone":      place.get("phone"),
-            "data_id":    place.get("data_id"),
-            "gps":        place.get("gps_coordinates"),
-        }
-        for place in raw_places[:max_results]
-    ]
+    places = [_normalize_place(place) for place in raw_places[:DEFAULT_MAX_RESULTS]]
+    return {
+        "tool_name": "search_places",
+        "status": "success",
+        "summary": f"Tìm thấy {len(places)} địa điểm cho query: {normalized_query}",
+        "query": normalized_query,
+        "places": places,
+        "verified": True,
+    }
 
-    return {"places": places}
+
+def search_attractions(user_request: str) -> dict[str, Any]:
+    """Wrapper cho registry: tìm điểm tham quan bằng một chuỗi request."""
+    result = search_places(user_request)
+    result["tool_name"] = "search_attractions"
+    if result["status"] == "success":
+        result["summary"] = f"Tìm điểm tham quan theo Google Maps query: {result['query']}"
+    return result
+
+
+def _normalize_place(place: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "title": place.get("title"),
+        "address": place.get("address"),
+        "rating": place.get("rating"),
+        "reviews": place.get("reviews"),
+        "price": place.get("price"),
+        "type": place.get("type"),
+        "open_state": place.get("open_state"),
+        "phone": place.get("phone"),
+        "data_id": place.get("data_id"),
+        "gps": place.get("gps_coordinates"),
+    }
+
+
+def _error_result(message: str, query: str | None = None) -> dict[str, Any]:
+    return {
+        "tool_name": "search_places",
+        "status": "error",
+        "summary": message,
+        "query": query,
+        "places": [],
+        "verified": False,
+    }
