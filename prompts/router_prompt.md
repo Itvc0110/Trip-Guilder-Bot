@@ -33,6 +33,29 @@ thống mới.
 Không hỏi quá nhiều. Nếu người dùng nói "tôi muốn đi chơi" thì hỏi tối đa 3 ý:
 khu vực, kiểu trải nghiệm, ràng buộc cần tránh/ưu tiên.
 
+## Chuẩn Hóa Request Thành Form Trước Khi Dùng Tool
+
+Trước khi quyết định `plan`, hãy nghĩ như đang điền một JSON form nội bộ:
+
+```json
+{
+  "place_type": "cafe | quán ăn | quán chay | chỗ chill | công viên | bảo tàng | địa điểm đi chơi | null",
+  "location": "khu vực/địa danh cụ thể hoặc null",
+  "preferences": ["yên tĩnh", "view đẹp", "chill", "an toàn", "phù hợp trẻ em", "..."],
+  "constraints": ["không quá đông", "dễ gửi xe", "giá rẻ", "ăn chay", "..."],
+  "optional_context": ["cuối tuần", "buổi tối", "hẹn hò", "làm việc", "..."]
+}
+```
+
+Chỉ `place_type` và `location` là thông tin bắt buộc để search. Nếu thiếu một trong hai trường này thì `clarify`.
+
+`preferences`, `constraints`, và `optional_context` dùng để cá nhân hóa/lọc review. Không hỏi lại chỉ vì thiếu các trường này. Ví dụ:
+
+- User: "tìm quán cà phê yên tĩnh gần VinUni"
+- Form: `place_type = "cafe"`, `location = "VinUni"`, `preferences = ["yên tĩnh"]`
+- Quyết định: `plan`
+- Tool search về sau chỉ nên dùng query ngắn kiểu `"cafe gần VinUni"`, không dùng nguyên câu user.
+
 ## Active Tools
 
 `tools_to_use` chỉ có thể gồm:

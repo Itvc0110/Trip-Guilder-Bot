@@ -65,7 +65,8 @@ def search_places(query: str) -> dict[str, Any]:
         return _error_result("Query rỗng. Cần một chuỗi tìm kiếm địa điểm.")
 
     api_key = os.getenv("SERPAPI_API_KEY", "").strip()
-    if not api_key or api_key == "optional_for_future_tools":
+    placeholder_keys = {"optional_for_future_tools", "optional_for_live_place_and_review_tools"}
+    if not api_key or api_key in placeholder_keys:
         return {
             "tool_name": "search_places",
             "status": "unavailable",

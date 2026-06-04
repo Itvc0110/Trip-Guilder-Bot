@@ -5,14 +5,57 @@ from __future__ import annotations
 
 ACTIVE_PIPELINE = ["search_places", "review_search", "filter_reviews"]
 
+REQUEST_FORM_SCHEMA = {
+    "name": "request_form",
+    "description": "Form trung gian tách câu user thành dữ liệu dùng cho từng tool.",
+    "fields": {
+        "place_type": {
+            "required_for_search": True,
+            "used_by": ["search_places"],
+            "description": "Loại địa điểm cần tìm: cafe, quán ăn, quán chay, chỗ chill, công viên, bảo tàng, địa điểm đi chơi.",
+            "ask_if_missing": True,
+        },
+        "location": {
+            "required_for_search": True,
+            "used_by": ["search_places"],
+            "description": "Khu vực/địa danh: VinUni, Tây Hồ, Hồ Gươm, Cầu Giấy, Hà Nội...",
+            "ask_if_missing": True,
+        },
+        "search_query": {
+            "required_for_search": True,
+            "used_by": ["search_places"],
+            "description": "Query ngắn, ít nhiễu để search Google Maps, ví dụ 'cafe gần VinUni'.",
+            "ask_if_missing": False,
+        },
+        "preferences": {
+            "required_for_search": False,
+            "used_by": ["filter_reviews", "planner"],
+            "description": "Ưu tiên cá nhân hóa như yên tĩnh, đẹp, chill, an toàn, phù hợp trẻ em, nhiều review tốt.",
+            "ask_if_missing": False,
+        },
+        "constraints": {
+            "required_for_search": False,
+            "used_by": ["filter_reviews", "planner"],
+            "description": "Ràng buộc như không quá đông, không ồn, dễ gửi xe, giá rẻ, ăn chay.",
+            "ask_if_missing": False,
+        },
+        "optional_context": {
+            "required_for_search": False,
+            "used_by": ["filter_reviews", "planner"],
+            "description": "Bối cảnh không bắt buộc như cuối tuần, buổi tối, hẹn hò, làm việc, sống ảo.",
+            "ask_if_missing": False,
+        },
+    },
+}
+
 
 TOOL_SCHEMAS = [
     {
         "name": "search_places",
         "aliases": ["search_attractions"],
-        "description": "Tìm quán ăn, cafe, chỗ chill hoặc địa điểm đi chơi bằng một query tự nhiên giống Google Maps search bar.",
+        "description": "Tìm quán ăn, cafe, chỗ chill hoặc địa điểm đi chơi bằng query ngắn đã chuẩn hóa từ request_form.",
         "input": {
-            "query": "str - câu tìm kiếm, ví dụ 'cafe yên tĩnh ở Tây Hồ' hoặc 'quán ăn gần Hồ Gươm'.",
+            "query": "str - chỉ gồm place_type + location, ví dụ 'cafe gần VinUni'. Không nhét toàn bộ câu user hoặc preference dài vào đây.",
         },
         "output": {
             "tool_name": "search_places",
