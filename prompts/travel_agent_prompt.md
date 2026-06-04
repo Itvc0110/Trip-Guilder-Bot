@@ -111,9 +111,9 @@ Quy tắc:
 - `[TOOL: check_holiday]`: tìm ngày lễ/kỳ nghỉ/giai đoạn cao điểm gần ngày đi.
 - `[TOOL: check_events]`: tìm sự kiện gần điểm đến và ngày đi.
 - `[TOOL: search_restaurants]`: tìm nhà hàng theo vị trí, ngân sách, khẩu vị,
-  ăn kiêng.
+  ăn kiêng. Kết quả bao gồm ảnh từ Google Maps được lưu vào database.
 - `[TOOL: search_attractions]`: tìm điểm tham quan theo mục đích, nhóm người đi,
-  thời lượng, tiếp cận.
+  thời lượng, tiếp cận. Kết quả bao gồm ảnh từ Google Maps được lưu vào database.
 - `[TOOL: route_advice]`: gợi ý thứ tự đi, khoảng cách, phương tiện, khu đông,
   giao thông.
 - `[TOOL: weather_safety]`: kiểm tra thời tiết, chất lượng không khí, an toàn.
@@ -137,6 +137,9 @@ Không dùng tool rời rạc. Luôn tổng hợp chéo:
   nhà, dễ tiếp cận, ít phải đi bộ ngoài trời.
 - **calendar_export + itinerary:** chỉ đề xuất export khi ngày, giờ, địa điểm đã
   đủ rõ và người dùng chấp nhận bản nháp.
+
+Lưu ý: Ảnh từ search_attractions/search_restaurants được lưu tự động trong database,
+có thể dùng khi recommend địa điểm để người dùng hình dung tốt hơn.
 
 Nếu tool findings mâu thuẫn nhau, giải thích trade-off ngắn gọn.
 
@@ -237,13 +240,24 @@ Nêu giả định và câu hỏi cần hỏi thêm nếu có.
 Tóm tắt tool findings theo từng tool. Ghi rõ trạng thái: verified, simulated,
 placeholder hoặc unavailable.
 
+Khi có ảnh từ search results:
+- Nêu số lượng ảnh tìm được
+- Hiển thị 2-3 ảnh đầu tiên dưới dạng markdown link `[Ảnh](#url)` hoặc raw URL
+- Gợi ý người dùng xem thêm ảnh để hình dung địa điểm tốt hơn
+
 ## Gợi Ý Cá Nhân Hóa
 
 Đưa khuyến nghị phù hợp với bối cảnh người dùng.
 
+Nếu quán/địa điểm được chọn có ảnh từ Google Maps:
+- Liệt kê 2-3 ảnh đầu tiên dưới dạng: `📸 [Tên quán - Ảnh 1](url)`, `📸 [Tên quán - Ảnh 2](url)`
+- Hoặc raw URL: `https://...`
+
 ## Lịch Trình Hoặc Tuyến Đường
 
 Đưa lịch trình khả thi. Nếu chưa đủ dữ liệu, đưa cấu trúc nháp hoặc option.
+
+Khi liệt kê các điểm trong lịch trình, nếu có ảnh sẵn có trong database, có thể đưa link ảnh để người dùng hình dung tốt hơn.
 
 ## Cảnh Báo
 

@@ -67,6 +67,8 @@ Chọn tool theo nhu cầu:
 - Có thời tiết/an toàn/trẻ em/người lớn tuổi: dùng `weather_safety`.
 - Chỉ dùng `calendar_export` khi lịch trình đủ rõ về ngày, giờ và điểm đến.
 
+Lưu ý: Ảnh từ search_attractions/search_restaurants tự động được lưu vào database, không cần gọi tool riêng.
+
 ## One-shot Example
 
 Input:

@@ -120,6 +120,22 @@ def search_attractions(user_request: str) -> dict[str, Any]:
 
 
 def _normalize_place(place: dict[str, Any]) -> dict[str, Any]:
+    # SerpAPI local_results không có field 'photos', thay vào đó dùng thumbnail
+    images = []
+
+    # Collect available images/thumbnails
+    if place.get("thumbnail"):
+        images.append({
+            "url": place.get("thumbnail"),
+            "source": "Google Maps"
+        })
+
+    if place.get("serpapi_thumbnail"):
+        images.append({
+            "url": place.get("serpapi_thumbnail"),
+            "source": "SerpAPI"
+        })
+
     return {
         "title": place.get("title"),
         "address": place.get("address"),
@@ -131,6 +147,8 @@ def _normalize_place(place: dict[str, Any]) -> dict[str, Any]:
         "phone": place.get("phone"),
         "data_id": place.get("data_id"),
         "gps": place.get("gps_coordinates"),
+        "images": images,
+        "photos_link": place.get("photos_link"),  # Link để fetch ảnh đầy đủ sau
     }
 
 

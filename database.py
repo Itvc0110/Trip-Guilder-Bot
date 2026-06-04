@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import json
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "travel.db")
 
@@ -27,7 +28,9 @@ def init_db():
         open_hours TEXT NOT NULL,
         crowd_level INTEGER DEFAULT 0, -- number of planned visits at current time
         price_range TEXT NOT NULL, -- $, $$, $$$
-        description TEXT NOT NULL
+        description TEXT NOT NULL,
+        images TEXT DEFAULT '[]', -- JSON array of image URLs from Google Maps
+        data_id TEXT -- Google Maps data_id for fetching detailed info
     )
     """)
     
@@ -225,6 +228,54 @@ def log_event(event_type, spot_id, old_time_slot, new_time_slot, reason, vibe, n
     """, (event_type, spot_id, old_time_slot, new_time_slot, reason, vibe, num_people))
     conn.commit()
     conn.close()
+
+def save_search_result(place_data: dict):
+    """Lưu kết quả search từ Google Maps vào database với ảnh."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    images_json = json.dumps(place_data.get("images", []))
+
+    cursor.execute("""
+    INSERT INTO spots (name, latitude, longitude, address, rating, review_count,
+                       vibe, tags, open_hours, crowd_level, price_range, description, images, data_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        place_data.get("title"),
+        place_data.get("latitude", 0),
+        place_data.get("longitude", 0),
+        place_data.get("address", ""),
+        place_data.get("rating", 0),
+        place_data.get("reviews", 0),
+        "search_result",  # vibe
+        place_data.get("type", ""),  # tags
+        place_data.get("open_state", ""),  # open_hours
+        0,  # crowd_level
+        place_data.get("price", ""),  # price_range
+        f"{place_data.get('title')} - Từ Google Maps",  # description
+        images_json,
+        place_data.get("data_id", "")
+    ))
+
+    spot_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return spot_id
+
+def get_spot_images(spot_id):
+    """Lấy danh sách ảnh của một spot."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT images FROM spots WHERE id = ?", (spot_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        try:
+            return json.loads(row[0])
+        except (json.JSONDecodeError, TypeError):
+            return []
+    return []
 
 if __name__ == "__main__":
     init_db()
