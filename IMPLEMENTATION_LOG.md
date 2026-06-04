@@ -119,6 +119,18 @@ The main prompt includes:
 - Required output sections.
 - Edge case handling.
 
+Latest prompt-structure update:
+
+- Reorganized the travel-agent prompt into explicit sections: role, objective,
+  inputs, conversation context, workflow, follow-up policy, tool status,
+  tool-combination rules, personalization logic, edge cases, hard guardrails,
+  output contract, and quality checklist.
+- Reorganized the reviewer prompt into safety, grounding, context, tool-use,
+  practicality, and output-format checks.
+- Attempted to inspect `1-day04-prompt-engineering-tool-calling-v2.pdf`; local
+  extraction tools could identify the file and page count, but the PDF text was
+  not extractable in this environment, likely due encoded/image-heavy slides.
+
 Tool placeholders in the prompt:
 
 - `[TOOL: check_holiday]`

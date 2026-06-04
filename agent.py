@@ -33,6 +33,7 @@ class TravelAgent:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.client = OpenRouterClient(settings)
+        self.router_prompt = (PROMPTS_DIR / "router_prompt.md").read_text(encoding="utf-8")
         self.travel_prompt = (PROMPTS_DIR / "travel_agent_prompt.md").read_text(encoding="utf-8")
         self.reviewer_prompt = (PROMPTS_DIR / "reviewer_prompt.md").read_text(encoding="utf-8")
         self.summarizer_prompt = (PROMPTS_DIR / "summarizer_prompt.md").read_text(encoding="utf-8")
@@ -61,10 +62,6 @@ class TravelAgent:
         if not self.settings.has_api_key:
             return fallback
 
-        system = (
-            "Bạn là router cho chatbot lập kế hoạch du lịch. "
-            "Chỉ trả về JSON hợp lệ, không thêm giải thích."
-        )
         user = f"""
 Hãy phân loại yêu cầu mới nhất và chọn các tool cần dùng.
 
@@ -84,7 +81,10 @@ Trả về JSON với các trường:
         try:
             content = self.client.chat(
                 model=self.settings.router_model,
-                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                messages=[
+                    {"role": "system", "content": self.router_prompt},
+                    {"role": "user", "content": user},
+                ],
                 temperature=0.1,
                 response_format={"type": "json_object"},
             )
