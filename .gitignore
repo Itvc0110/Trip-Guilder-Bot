@@ -15,6 +15,7 @@ INTERNAL-DEMO-SCRIPT.md
 
 # Tool scratch output
 arxiv_papers/
+conversations/*.json
 
 # OS / editor
 .DS_Store

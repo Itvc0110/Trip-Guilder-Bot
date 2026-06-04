@@ -1,1 +1,1 @@
-"""Placeholder travel tools for Trip-Guilder-Bot."""
+"""Active place/review tools for DiChoiBot."""
