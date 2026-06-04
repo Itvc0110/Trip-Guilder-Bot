@@ -3,7 +3,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv() -> bool:
+        return False
 
 
 DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -21,7 +25,7 @@ class Settings:
     reviewer_model: str
     summary_model: str
     conversation_window: int
-    app_title: str = "Trip-Guilder-Bot"
+    app_title: str = "DiChoiBot"
     app_referer: str = "http://localhost"
 
     @property
@@ -39,6 +43,6 @@ def load_settings() -> Settings:
         reviewer_model=os.getenv("REVIEWER_MODEL", DEFAULT_MODEL).strip(),
         summary_model=os.getenv("SUMMARY_MODEL", DEFAULT_SUMMARY_MODEL).strip(),
         conversation_window=int(os.getenv("CONVERSATION_WINDOW", "7")),
-        app_title=os.getenv("OPENROUTER_APP_TITLE", "Trip-Guilder-Bot").strip(),
+        app_title=os.getenv("OPENROUTER_APP_TITLE", "DiChoiBot").strip(),
         app_referer=os.getenv("OPENROUTER_APP_REFERER", "http://localhost").strip(),
     )

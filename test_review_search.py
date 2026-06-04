@@ -37,7 +37,7 @@ def test_single_review():
     print("Bước 2: get_place_reviews")
     print("=" * 60)
 
-    review_result = get_place_reviews(first_place["data_id"], max_reviews=5)
+    review_result = get_place_reviews(first_place["data_id"], max_best=5)
     print(json.dumps(review_result, indent=2, ensure_ascii=False))
 
 
@@ -54,7 +54,7 @@ def test_batch_reviews():
 
     # Lấy review cho 2 địa điểm đầu tiên, mỗi nơi 3 review
     top_2_places = search_result["places"][:2]
-    all_reviews = get_reviews_for_places(top_2_places, max_reviews_per_place=3)
+    all_reviews = get_reviews_for_places(top_2_places, max_best_per_place=2, max_worst_per_place=1)
 
     for r in all_reviews:
         print(f"\n--- {r.get('place_title')} ---")

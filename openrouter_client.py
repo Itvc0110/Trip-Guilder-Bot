@@ -37,24 +37,30 @@ class OpenRouterClient:
         if response_format:
             payload["response_format"] = response_format
 
-        response = requests.post(
-            self.settings.openrouter_base_url,
-            headers={
-                "Authorization": f"Bearer {self.settings.openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": self.settings.app_referer,
-                "X-OpenRouter-Title": self.settings.app_title,
-            },
-            data=json.dumps(payload),
-            timeout=60,
-        )
+        try:
+            response = requests.post(
+                self.settings.openrouter_base_url,
+                headers={
+                    "Authorization": f"Bearer {self.settings.openrouter_api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": self.settings.app_referer,
+                    "X-OpenRouter-Title": self.settings.app_title,
+                },
+                data=json.dumps(payload),
+                timeout=60,
+            )
+        except requests.RequestException as exc:
+            raise OpenRouterError(f"OpenRouter request failed: {exc}") from exc
 
         if response.status_code >= 400:
             raise OpenRouterError(
                 f"OpenRouter returned HTTP {response.status_code}: {response.text[:500]}"
             )
 
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise OpenRouterError(f"OpenRouter returned non-JSON response: {response.text[:500]}") from exc
         try:
             return data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:

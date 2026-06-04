@@ -1,8 +1,8 @@
 """Tool search_places.
 
 Mục đích: tìm địa điểm trên Google Maps giống như khi người dùng gõ một câu vào
-ô search bar, ví dụ "quán phở ngon gần Hồ Gươm" hoặc "bảo tàng phù hợp trẻ em ở
-Hà Nội".
+ô search bar, ví dụ "quán phở ngon gần Hồ Gươm", "cafe yên tĩnh ở Tây Hồ" hoặc
+"chỗ đi chơi phù hợp trẻ em ở Hà Nội".
 
 Input duy nhất:
 - query: str
@@ -27,7 +27,7 @@ DEFAULT_MAX_RESULTS = 6
 TOOL_DEFINITION = {
     "name": "search_places",
     "description": (
-        "Tìm nhà hàng, cafe, điểm tham quan, khách sạn hoặc bất kỳ địa điểm nào "
+        "Tìm quán ăn, cafe, chỗ chill, điểm vui chơi hoặc hoạt động ngắn hạn "
         "trên Google Maps bằng một chuỗi query giống ô tìm kiếm Google Maps."
     ),
     "input_schema": {
@@ -37,7 +37,7 @@ TOOL_DEFINITION = {
                 "type": "string",
                 "description": (
                     "Câu tìm kiếm tự nhiên, nên gồm loại địa điểm và khu vực. "
-                    "Ví dụ: 'quán chay gần phố cổ Hà Nội', 'công viên cho trẻ em ở Hà Nội'."
+                    "Ví dụ: 'quán chay gần phố cổ Hà Nội', 'cafe yên tĩnh ở Tây Hồ'."
                 ),
             },
         },

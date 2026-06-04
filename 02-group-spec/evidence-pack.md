@@ -14,7 +14,7 @@ Tài liệu này lưu trữ các bằng chứng thực tế (evidence) định h
 Nhóm tự dùng Google Search với câu lệnh:  
 `"lập lịch trình hẹn hò cuối tuần lãng mạn cho cặp đôi tại Hà Nội"`
 
-![Google AI Overview hạn chế](evidence_image\ev1.png)
+![Google AI Overview hạn chế](../evidence_image/ev1.png)
 
 | Observation | Screenshot/link | Path liên quan | Điều học được |
 |-------------|----------------|----------------|----------------|

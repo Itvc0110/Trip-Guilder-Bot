@@ -1,12 +1,17 @@
-"""Registry cho toàn bộ tool của Trip-Guilder-Bot.
+"""Registry cho tool chain gợi ý địa điểm theo review.
 
-Mục đích: gom các tool có thể dùng, chạy đúng tool theo quyết định của router,
-và trả kết quả có cấu trúc cho model. Registry không tự suy luận nội dung chuyến
-đi; nó chỉ điều phối tool và giữ trạng thái placeholder/unavailable rõ ràng.
+Active flow hiện tại:
+1. `search_places`: tìm địa điểm từ một query kiểu Google Maps search bar.
+2. `review_search`: đọc review cho từng địa điểm, ưu tiên `data_id`.
+3. `filter_reviews`: lọc/xếp hạng địa điểm theo nhu cầu user và review.
+
+Các tool cũ vẫn có thể tồn tại trong thư mục `tools/`, nhưng không còn nằm
+trong luồng chính của scope mới.
 """
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 from database import save_search_result
 from tools.place_search import search_attractions
 
@@ -76,6 +81,65 @@ def run_placeholder_tools(route: dict, user_request: str) -> list[dict]:
         if tool_name in ("search_attractions", "search_restaurants") and result.get("status") == "success":
             _save_places_to_db(result.get("places", []))
 
+=======
+from typing import Any
+
+from tools.filter_review import filter_reviews
+from tools.place_search import search_places
+from tools.review_search import review_search
+
+
+ACTIVE_TOOL_NAMES = ["search_places", "review_search", "filter_reviews"]
+
+
+TOOL_REGISTRY = {
+    "search_places": search_places,
+    "review_search": review_search,
+    "filter_reviews": filter_reviews,
+}
+
+
+def run_placeholder_tools(route: dict[str, Any], user_request: str) -> list[dict[str, Any]]:
+    """Run the active place recommendation pipeline.
+
+    The name is kept for backward compatibility with `agent.py`.
+    """
+    if route.get("decision") != "plan":
+        return []
+
+    findings: list[dict[str, Any]] = []
+    place_result = search_places(user_request)
+    findings.append(place_result)
+
+    places = place_result.get("places") or []
+    places_with_reviews = []
+    if not places:
+        findings.append(
+            {
+                "tool_name": "review_search",
+                "status": "unavailable",
+                "summary": "Chưa có địa điểm từ search_places nên chưa thể đọc review.",
+                "place": None,
+                "reviews": [],
+                "verified": False,
+            }
+        )
+
+    for place in places:
+        review_result = review_search(place)
+        findings.append(review_result)
+        places_with_reviews.append(
+            {
+                "place": place,
+                "status": review_result.get("status"),
+                "reviews": review_result.get("reviews") or [],
+                "review_summary": review_result.get("summary"),
+            }
+        )
+
+    filter_result = filter_reviews(user_request, places_with_reviews)
+    findings.append(filter_result)
+>>>>>>> 286cca25caec194fe697f6312627054eb3f29d0e
     return findings
 
 
