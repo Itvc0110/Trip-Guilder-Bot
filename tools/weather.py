@@ -11,12 +11,16 @@ from __future__ import annotations
 def weather_safety(user_request: str) -> dict:
     return {
         "tool_name": "weather_safety",
-        "status": "placeholder",
+        "status": "simulated",
         "summary": (
-            "Dữ liệu thời tiết và an toàn chưa live. Tool này sẽ kiểm tra mưa, "
-            "nắng nóng, bão, không khí xấu và kết hợp search_attractions để "
-            "gợi ý phương án trong nhà."
+            "Demo: thời tiết được giả lập ở mức cần có phương án dự phòng; nên "
+            "kết hợp search_attractions để chọn điểm trong nhà nếu mưa/nắng gắt."
         ),
+        "findings": [
+            "Nên có ít nhất một điểm trong nhà làm backup.",
+            "Tránh hoạt động ngoài trời kéo dài giữa trưa.",
+            "Nếu có trẻ em/người lớn tuổi, thêm điểm nghỉ có điều hòa hoặc cafe gần tuyến.",
+        ],
         "input_hint": user_request,
-        "verified": False,
+        "verified": "simulated_for_demo",
     }

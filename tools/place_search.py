@@ -12,12 +12,17 @@ from __future__ import annotations
 def search_attractions(user_request: str) -> dict:
     return {
         "tool_name": "search_attractions",
-        "status": "placeholder",
+        "status": "simulated",
         "summary": (
-            "Tìm điểm tham quan chưa live. Tool này sẽ tìm điểm theo sở thích, "
-            "độ tuổi, tiếp cận, thời lượng và kết hợp weather_safety/route_advice "
-            "để chọn lịch phù hợp."
+            "Demo: đã tìm nhóm điểm tham quan theo sở thích, độ tuổi, thời lượng "
+            "và khả năng kết hợp với weather_safety/route_advice."
         ),
+        "findings": [
+            "Gia đình có trẻ em: ưu tiên bảo tàng, công viên, sở thú, hồ/cafe nghỉ.",
+            "Sightseeing/văn hóa: ưu tiên Văn Miếu, Bảo tàng Dân tộc học, Hoàn Kiếm.",
+            "Nếu thời tiết xấu: đẩy điểm trong nhà lên trước.",
+            "Nếu route xa nhau: tách must-have và optional.",
+        ],
         "input_hint": user_request,
-        "verified": False,
+        "verified": "simulated_for_demo",
     }

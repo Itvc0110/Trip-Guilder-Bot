@@ -14,7 +14,8 @@ Built files:
 - `.env.example`: placeholder environment variables.
 - `prompts/travel_agent_prompt.md`: full travel assistant system prompt.
 - `prompts/reviewer_prompt.md`: reviewer model prompt.
-- `tools/`: placeholder tool package for future live API integrations.
+- `prompts/summarizer_prompt.md`: prompt for summarizing older conversation turns.
+- `tools/`: simulated demo tool package for future live API integrations.
 
 Removed files:
 
@@ -32,11 +33,18 @@ The app uses OpenRouter and separates work across three model roles:
 - `ROUTER_MODEL`: decides whether to clarify, plan, refuse, or call placeholder tools.
 - `PLANNER_MODEL`: drafts the personalized travel recommendation.
 - `REVIEWER_MODEL`: checks the answer for safety, hallucination risk, missing context, output structure, and practical feasibility.
+- `SUMMARY_MODEL`: summarizes older conversation turns when the context window exceeds 7 turns.
 
 All model roles default to:
 
 ```text
 google/gemini-2.5-flash
+```
+
+The summarizer model defaults to:
+
+```text
+deepseek/deepseek-chat-v3-0324
 ```
 
 ## Environment Variables
@@ -51,6 +59,8 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1/chat/completions
 ROUTER_MODEL=google/gemini-2.5-flash
 PLANNER_MODEL=google/gemini-2.5-flash
 REVIEWER_MODEL=google/gemini-2.5-flash
+SUMMARY_MODEL=deepseek/deepseek-chat-v3-0324
+CONVERSATION_WINDOW=7
 ```
 
 Optional future tool keys:
@@ -109,6 +119,18 @@ The main prompt includes:
 - Required output sections.
 - Edge case handling.
 
+Latest prompt-structure update:
+
+- Reorganized the travel-agent prompt into explicit sections: role, objective,
+  inputs, conversation context, workflow, follow-up policy, tool status,
+  tool-combination rules, personalization logic, edge cases, hard guardrails,
+  output contract, and quality checklist.
+- Reorganized the reviewer prompt into safety, grounding, context, tool-use,
+  practicality, and output-format checks.
+- Attempted to inspect `1-day04-prompt-engineering-tool-calling-v2.pdf`; local
+  extraction tools could identify the file and page count, but the PDF text was
+  not extractable in this environment, likely due encoded/image-heavy slides.
+
 Tool placeholders in the prompt:
 
 - `[TOOL: check_holiday]`
@@ -119,18 +141,19 @@ Tool placeholders in the prompt:
 - `[TOOL: weather_safety]`
 - `[TOOL: calendar_export]`
 
-## Placeholder Tools
+## Simulated Demo Tools
 
-All tools currently return:
+Tools now return simulated demo findings:
 
 ```json
 {
-  "status": "placeholder",
-  "verified": false
+  "status": "simulated",
+  "verified": "simulated_for_demo"
 }
 ```
 
-This lets the agent practice tool-aware reasoning without pretending to have live data.
+This lets the agent behave as if the tool layer is complete for demo purposes,
+while still avoiding a false claim that data is live verified.
 
 Future live integrations:
 
@@ -220,7 +243,8 @@ Expected:
 ## Known Limits
 
 - CLI only; no web UI.
-- Tools are placeholders.
+- Tools are simulated, not live APIs.
+- The chatbot keeps 7 recent turns and summarizes older turns.
 - Missing OpenRouter key triggers local pseudo responses.
 - Reviewer cannot revise the plan automatically yet; it appends a review check.
 - No persistent memory or correction log yet.

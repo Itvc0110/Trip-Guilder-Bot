@@ -14,48 +14,61 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 @dataclass
+class ConversationTurn:
+    user: str
+    assistant: str
+
+
+@dataclass
 class AgentResult:
     route: dict[str, Any]
     tool_findings: list[dict[str, Any]]
     draft_answer: str
     review: str
     final_answer: str
+    memory_summary: str
 
 
 class TravelAgent:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.client = OpenRouterClient(settings)
+        self.router_prompt = (PROMPTS_DIR / "router_prompt.md").read_text(encoding="utf-8")
         self.travel_prompt = (PROMPTS_DIR / "travel_agent_prompt.md").read_text(encoding="utf-8")
         self.reviewer_prompt = (PROMPTS_DIR / "reviewer_prompt.md").read_text(encoding="utf-8")
+        self.summarizer_prompt = (PROMPTS_DIR / "summarizer_prompt.md").read_text(encoding="utf-8")
+        self.memory_summary = ""
+        self.history: list[ConversationTurn] = []
 
     def run(self, user_request: str) -> AgentResult:
-        route = self._route_request(user_request)
+        conversation_context = self._conversation_context()
+        route = self._route_request(user_request, conversation_context)
         tool_findings = run_placeholder_tools(route, user_request)
 
         if route.get("decision") == "refuse":
             draft_answer = self._safe_refusal(user_request, route)
             review = "Từ chối bằng guardrail local. Không cần gọi reviewer model."
-            return AgentResult(route, tool_findings, draft_answer, review, draft_answer)
+            final_answer = draft_answer
+        else:
+            draft_answer = self._plan_trip(user_request, route, tool_findings, conversation_context)
+            review = self._review_answer(user_request, draft_answer, tool_findings, conversation_context)
+            final_answer = self._apply_review(draft_answer, review)
 
-        draft_answer = self._plan_trip(user_request, route, tool_findings)
-        review = self._review_answer(user_request, draft_answer, tool_findings)
-        final_answer = self._apply_review(draft_answer, review)
-        return AgentResult(route, tool_findings, draft_answer, review, final_answer)
+        self._remember(user_request, final_answer)
+        return AgentResult(route, tool_findings, draft_answer, review, final_answer, self.memory_summary)
 
-    def _route_request(self, user_request: str) -> dict[str, Any]:
+    def _route_request(self, user_request: str, conversation_context: str) -> dict[str, Any]:
         fallback = local_route_request(user_request)
         if not self.settings.has_api_key:
             return fallback
 
-        system = (
-            "Bạn là router cho trợ lý lập kế hoạch du lịch. "
-            "Chỉ trả về JSON hợp lệ, không thêm giải thích."
-        )
         user = f"""
-Hãy phân loại yêu cầu sau và chọn các tool placeholder cần dùng.
+Hãy phân loại yêu cầu mới nhất và chọn các tool cần dùng.
 
-Yêu cầu:
+Context hội thoại:
+{conversation_context}
+
+Yêu cầu mới nhất:
 {user_request}
 
 Trả về JSON với các trường:
@@ -68,7 +81,10 @@ Trả về JSON với các trường:
         try:
             content = self.client.chat(
                 model=self.settings.router_model,
-                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                messages=[
+                    {"role": "system", "content": self.router_prompt},
+                    {"role": "user", "content": user},
+                ],
                 temperature=0.1,
                 response_format={"type": "json_object"},
             )
@@ -82,18 +98,20 @@ Trả về JSON với các trường:
         user_request: str,
         route: dict[str, Any],
         tool_findings: list[dict[str, Any]],
+        conversation_context: str,
     ) -> str:
         if not self.settings.has_api_key:
-            return local_placeholder_answer(user_request, route, tool_findings)
+            return local_demo_answer(user_request, route, tool_findings, conversation_context)
 
         messages = [
             {"role": "system", "content": self.travel_prompt},
             {
                 "role": "user",
                 "content": (
-                    f"User request:\n{user_request}\n\n"
+                    f"Context hội thoại:\n{conversation_context}\n\n"
+                    f"Yêu cầu mới nhất:\n{user_request}\n\n"
                     f"Quyết định router:\n{json.dumps(route, indent=2, ensure_ascii=False)}\n\n"
-                    f"Kết quả tool placeholder:\n{json.dumps(tool_findings, indent=2, ensure_ascii=False)}"
+                    f"Kết quả tool demo:\n{json.dumps(tool_findings, indent=2, ensure_ascii=False)}"
                 ),
             },
         ]
@@ -118,9 +136,10 @@ Trả về JSON với các trường:
         user_request: str,
         draft_answer: str,
         tool_findings: list[dict[str, Any]],
+        conversation_context: str,
     ) -> str:
         if not self.settings.has_api_key:
-            return "Review pseudo local: cần tự xác minh dữ liệu live vì các tool hiện vẫn là placeholder."
+            return "Review pseudo local: dữ liệu tool đang là mô phỏng demo, cần xác minh khi nối API thật."
 
         try:
             return self.client.chat(
@@ -130,7 +149,8 @@ Trả về JSON với các trường:
                     {
                         "role": "user",
                         "content": (
-                            f"Yêu cầu gốc:\n{user_request}\n\n"
+                            f"Context hội thoại:\n{conversation_context}\n\n"
+                            f"Yêu cầu mới nhất:\n{user_request}\n\n"
                             f"Kết quả tool:\n{json.dumps(tool_findings, indent=2, ensure_ascii=False)}\n\n"
                             f"Câu trả lời nháp:\n{draft_answer}"
                         ),
@@ -161,6 +181,55 @@ Trả về JSON với các trường:
             "## Kiểm Tra Của Reviewer\n"
             f"Guardrail local đã kích hoạt: {route.get('safety_issue') or route.get('reason')}\n"
         )
+
+    def _conversation_context(self) -> str:
+        parts = []
+        if self.memory_summary:
+            parts.append(f"Tóm tắt các lượt cũ hơn:\n{self.memory_summary}")
+        if self.history:
+            recent = []
+            for index, turn in enumerate(self.history[-self.settings.conversation_window :], start=1):
+                recent.append(
+                    f"Lượt {index}\nUser: {turn.user}\nAssistant: {compact_text(turn.assistant, 900)}"
+                )
+            parts.append("Các lượt gần nhất:\n" + "\n\n".join(recent))
+        return "\n\n".join(parts) if parts else "Chưa có context hội thoại trước đó."
+
+    def _remember(self, user_request: str, assistant_answer: str) -> None:
+        self.history.append(ConversationTurn(user=user_request, assistant=assistant_answer))
+        if len(self.history) <= self.settings.conversation_window:
+            return
+
+        old_turns = self.history[: -self.settings.conversation_window]
+        self.history = self.history[-self.settings.conversation_window :]
+        self.memory_summary = self._summarize_old_turns(old_turns)
+
+    def _summarize_old_turns(self, old_turns: list[ConversationTurn]) -> str:
+        transcript = "\n\n".join(
+            f"User: {turn.user}\nAssistant: {compact_text(turn.assistant, 1200)}" for turn in old_turns
+        )
+        previous_summary = self.memory_summary or "Chưa có tóm tắt trước đó."
+
+        if not self.settings.has_api_key:
+            return local_summarize(previous_summary, old_turns)
+
+        try:
+            return self.client.chat(
+                model=self.settings.summary_model,
+                messages=[
+                    {"role": "system", "content": self.summarizer_prompt},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Tóm tắt hiện tại:\n{previous_summary}\n\n"
+                            f"Các lượt cần nén:\n{transcript}"
+                        ),
+                    },
+                ],
+                temperature=0.1,
+            )
+        except OpenRouterError:
+            return local_summarize(previous_summary, old_turns)
 
 
 def local_route_request(user_request: str) -> dict[str, Any]:
@@ -230,10 +299,11 @@ def normalize_route(parsed: dict[str, Any], fallback: dict[str, Any]) -> dict[st
     }
 
 
-def local_placeholder_answer(
+def local_demo_answer(
     user_request: str,
     route: dict[str, Any],
     tool_findings: list[dict[str, Any]],
+    conversation_context: str,
 ) -> str:
     missing = route.get("missing_info", [])
     findings = "\n".join(
@@ -244,23 +314,38 @@ def local_placeholder_answer(
         "## Tóm Tắt Yêu Cầu Chuyến Đi\n"
         f"{user_request}\n\n"
         "## Bối Cảnh Đã Xác Nhận\n"
-        "- Pseudo-agent đã nhận yêu cầu và định tuyến local.\n\n"
+        "- Chatbot đã nhận yêu cầu và định tuyến bằng router local.\n"
+        f"- Context hội thoại đang dùng: {compact_text(conversation_context, 260)}\n\n"
         "## Giả Định Hoặc Thông Tin Còn Thiếu\n"
         + ("\n".join(f"- Thiếu: {item}" for item in missing) if missing else "- Đủ bối cảnh để tạo bản nháp đầu tiên.")
         + "\n\n"
         "## Kết Quả Từ Công Cụ\n"
         f"{findings}\n\n"
         "## Gợi Ý Cá Nhân Hóa\n"
-        "- Hãy xem đây là bản nháp kế hoạch, chưa phải lịch trình live đã xác minh.\n"
-        "- Giữ các điểm dừng linh hoạt cho đến khi tool thời tiết, sự kiện, nhà hàng và tuyến đường được triển khai thật.\n\n"
+        "- Đây là bản demo giả lập như tool đã hoàn thiện, nhưng kết quả vẫn được đánh dấu `simulated` để không nhầm với dữ liệu live.\n"
+        "- Kết hợp event + route để tránh khu đông/tắc, weather + attraction để chọn indoor/outdoor, restaurant + route để chọn điểm ăn thuận tuyến.\n\n"
         "## Lịch Trình Hoặc Tuyến Đường\n"
-        "- Buổi sáng: chọn điểm tham quan hoặc khu ăn uống ưu tiên cao nhất.\n"
-        "- Giữa ngày: chừa buffer nghỉ ngơi hoặc ăn trưa.\n"
-        "- Buổi chiều: thêm một điểm gần đó, rồi để một slot tùy chọn.\n\n"
+        "- Buổi sáng: chọn điểm ưu tiên cao nhất, tránh khung giờ đông nếu tool event/holiday cảnh báo.\n"
+        "- Giữa ngày: chừa buffer nghỉ ngơi hoặc ăn trưa, ưu tiên nhà hàng thuận tuyến.\n"
+        "- Buổi chiều: thêm một điểm gần đó, rồi để một slot tùy chọn để không quá tải.\n\n"
         "## Cảnh Báo\n"
-        "- Tool placeholder chưa xác minh live về tình trạng mở cửa, giờ hoạt động, thời tiết, sự kiện, giao thông hoặc độ đông.\n\n"
+        "- Dữ liệu hiện là simulated tool output cho prototype; khi nối API thật cần xác minh lại giờ mở cửa, thời tiết, sự kiện, giao thông và độ đông.\n\n"
         "## Câu Hỏi Theo Dõi\n"
         f"{questions}\n\n"
         "## Đề Xuất Tinh Chỉnh\n"
-        "Bạn bổ sung thông tin còn thiếu, mình sẽ tinh chỉnh lại bản nháp theo cùng cấu trúc."
+        "Bạn có thể tiếp tục nhắn trong cùng cuộc hội thoại; chatbot sẽ dùng 7 lượt gần nhất và tóm tắt các lượt cũ hơn."
     )
+
+
+def local_summarize(previous_summary: str, old_turns: list[ConversationTurn]) -> str:
+    bullets = [previous_summary] if previous_summary and previous_summary != "Chưa có tóm tắt trước đó." else []
+    for turn in old_turns:
+        bullets.append(f"- User từng yêu cầu: {compact_text(turn.user, 180)}")
+    return "\n".join(bullets[-12:])
+
+
+def compact_text(text: str, limit: int) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
