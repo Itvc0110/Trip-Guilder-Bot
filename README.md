@@ -13,9 +13,12 @@ It includes:
 - A CLI entrypoint in `main.py`.
 - A multi-model agent orchestrator in `agent.py`.
 - An OpenRouter API wrapper in `openrouter_client.py`.
+- Chatbot memory with the latest 7 turns kept in context by default.
+- Older turns summarized by `SUMMARY_MODEL`.
 - A Markdown instruction prompt in `prompts/travel_agent_prompt.md`.
+- A summarizer prompt in `prompts/summarizer_prompt.md`.
 - A reviewer prompt in `prompts/reviewer_prompt.md`.
-- Placeholder tool modules in `tools/`.
+- Simulated demo tool modules in `tools/`.
 - `.env.example` for required and future API keys.
 
 The previous static HTML/CSS/JS prototype was removed because the browser mock
@@ -44,6 +47,8 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1/chat/completions
 ROUTER_MODEL=google/gemini-2.5-flash
 PLANNER_MODEL=google/gemini-2.5-flash
 REVIEWER_MODEL=google/gemini-2.5-flash
+SUMMARY_MODEL=deepseek/deepseek-chat-v3-0324
+CONVERSATION_WINDOW=7
 ```
 
 Optional future tool keys:
@@ -62,7 +67,13 @@ python main.py
 ```
 
 If `OPENROUTER_API_KEY` is missing, the app still runs in local pseudo mode and
-returns placeholder responses without calling the model.
+returns simulated demo responses without calling the model.
+
+Inside the CLI:
+
+- Type a normal travel request to chat.
+- Type `memory` or `context` to inspect the current conversation context.
+- Type `exit`, `quit`, or `thoát` to stop.
 
 ## Demo Prompts
 
@@ -109,6 +120,7 @@ The agent uses three model roles:
 - `ROUTER_MODEL`: classifies the request and chooses placeholder tools.
 - `PLANNER_MODEL`: drafts the personalized travel plan.
 - `REVIEWER_MODEL`: checks guardrails, uncertainty, hallucination risk, missing context, budget realism, and output structure.
+- `SUMMARY_MODEL`: summarizes older conversation turns once the context window exceeds 7 turns.
 
 All roles default to:
 
@@ -118,14 +130,14 @@ google/gemini-2.5-flash
 
 ## Tools
 
-Tools are placeholders for now. Each returns structured data with:
+Tools are simulated for demo now. Each returns structured data with:
 
 ```json
 {
   "tool_name": "tool_name",
-  "status": "placeholder",
-  "summary": "What this future tool will verify",
-  "verified": false
+  "status": "simulated",
+  "summary": "Demo finding for planning",
+  "verified": "simulated_for_demo"
 }
 ```
 

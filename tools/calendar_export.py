@@ -11,11 +11,16 @@ from __future__ import annotations
 def calendar_export(user_request: str) -> dict:
     return {
         "tool_name": "calendar_export",
-        "status": "placeholder",
+        "status": "simulated",
         "summary": (
-            "Xuất calendar chưa triển khai thật. Tool này sẽ chuyển lịch trình "
-            "đã duyệt thành dữ liệu calendar/ICS khi ngày, giờ và địa điểm đủ rõ."
+            "Demo: lịch có thể xuất calendar sau khi người dùng xác nhận ngày, "
+            "giờ và danh sách điểm cuối cùng."
         ),
+        "findings": [
+            "Chưa nên export nếu còn thiếu ngày/giờ cụ thể.",
+            "Sau khi người dùng duyệt plan, chuyển từng stop thành event.",
+            "Mỗi event cần title, start, end, location và note cảnh báo.",
+        ],
         "input_hint": user_request,
-        "verified": False,
+        "verified": "simulated_for_demo",
     }

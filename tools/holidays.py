@@ -11,11 +11,16 @@ from __future__ import annotations
 def check_holiday(user_request: str) -> dict:
     return {
         "tool_name": "check_holiday",
-        "status": "placeholder",
+        "status": "simulated",
         "summary": (
-            "Dữ liệu ngày lễ chưa live. Tool này sẽ tìm ngày lễ/kỳ nghỉ gần "
-            "ngày được hỏi để cảnh báo đông người, giá tăng và nhu cầu đặt trước."
+            "Demo: không phát hiện ngày lễ lớn chắc chắn, nhưng nếu đi cuối tuần "
+            "ở Hà Nội vẫn nên giả định lượng khách tăng tại khu hồ, phố cổ, bảo tàng."
         ),
+        "findings": [
+            "Cuối tuần thường đông hơn ngày thường tại điểm trung tâm.",
+            "Nên đi sớm trước 9:00 hoặc chọn khung sau 15:00 cho điểm ngoài trời.",
+            "Nếu người dùng cung cấp ngày cụ thể, tool live sẽ kiểm tra lịch nghỉ/lễ chính xác.",
+        ],
         "input_hint": user_request,
-        "verified": False,
+        "verified": "simulated_for_demo",
     }

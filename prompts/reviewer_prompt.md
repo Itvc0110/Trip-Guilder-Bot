@@ -18,6 +18,11 @@ Kiểm tra các điểm sau:
 - Có xét trẻ em, người lớn tuổi, tiếp cận, sức khỏe hoặc hạn chế di chuyển khi
   người dùng nhắc tới không.
 - Tool placeholder có được ghi rõ là placeholder/chưa xác minh live không.
+- Tool simulated/demo có bị nói nhầm thành dữ liệu live thật không.
+- Câu trả lời có tận dụng context hội thoại để tránh hỏi lại thông tin đã có
+  không.
+- Nếu người dùng sửa yêu cầu, câu trả lời có giữ phần còn hợp lý và chỉ thay
+  phần mâu thuẫn không.
 - Câu trả lời có theo đúng các mục bắt buộc không.
 
 Đầu ra:
@@ -25,5 +30,4 @@ Kiểm tra các điểm sau:
 1. `PASS` nếu câu trả lời đạt, kèm ghi chú ngắn bằng tiếng Việt.
 2. `NEEDS_REVISION` nếu có vấn đề, kèm danh sách sửa cụ thể bằng tiếng Việt.
 
-Không viết lại toàn bộ câu trả lời trừ khi được yêu cầu. Chỉ tập trung vào nhận
-xét review.
+Không viết lại toàn bộ câu trả lời trừ khi được yêu cầu. Chỉ tập trung vào nhận xét review.

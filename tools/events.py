@@ -12,12 +12,16 @@ from __future__ import annotations
 def check_events(user_request: str) -> dict:
     return {
         "tool_name": "check_events",
-        "status": "placeholder",
+        "status": "simulated",
         "summary": (
-            "Tìm kiếm sự kiện chưa live. Tool này sẽ tìm sự kiện gần điểm "
-            "đến/ngày đi và kết hợp với route_advice để cảnh báo đông người, "
-            "tắc đường hoặc nên đổi tuyến."
+            "Demo: giả lập có khả năng có hoạt động cuối tuần quanh khu trung tâm "
+            "và hồ, nên kết hợp route_advice để tránh tuyến quá đông."
         ),
+        "findings": [
+            "Khu Hoàn Kiếm/phố cổ có thể đông vào chiều tối cuối tuần.",
+            "Nếu có sự kiện quanh hồ hoặc phố đi bộ, nên tránh đưa xe vào lõi trung tâm.",
+            "Ưu tiên taxi/đi bộ đoạn ngắn hoặc đổi sang điểm gần hơn nếu có trẻ em.",
+        ],
         "input_hint": user_request,
-        "verified": False,
+        "verified": "simulated_for_demo",
     }
