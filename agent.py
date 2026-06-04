@@ -11,6 +11,7 @@ from tools.registry import run_placeholder_tools
 
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+MAX_REVIEW_REVISIONS = 2
 
 
 @dataclass
@@ -44,6 +45,7 @@ class TravelAgent:
         conversation_context = self._conversation_context()
         route = self._route_request(user_request, conversation_context)
         tool_findings = run_placeholder_tools(route, user_request)
+        revision_count = 0
 
         if route.get("decision") == "refuse":
             draft_answer = self._safe_refusal(user_request, route)
@@ -52,7 +54,43 @@ class TravelAgent:
         else:
             draft_answer = self._plan_trip(user_request, route, tool_findings, conversation_context)
             review = self._review_answer(user_request, draft_answer, tool_findings, conversation_context)
-            final_answer = self._apply_review(draft_answer, review)
+            while review_needs_revision(review) and revision_count < MAX_REVIEW_REVISIONS:
+                revision_count += 1
+                recovery_route = self._route_recovery(
+                    user_request=user_request,
+                    original_route=route,
+                    draft_answer=draft_answer,
+                    review=review,
+                    conversation_context=conversation_context,
+                    revision_number=revision_count,
+                )
+                route = recovery_route
+                if recovery_route.get("decision") == "refuse":
+                    draft_answer = self._safe_refusal(user_request, recovery_route)
+                    review = "Router recovery đã chuyển sang refuse sau khi reviewer phát hiện rủi ro."
+                    break
+                if recovery_route.get("decision") == "clarify":
+                    review = (
+                        "NEEDS_USER_CLARIFICATION: Router recovery xác định câu trả lời không nên tự sửa tiếp "
+                        "vì thiếu thông tin quan trọng."
+                    )
+                    break
+                tool_findings = run_placeholder_tools(recovery_route, user_request)
+                draft_answer = self._revise_answer(
+                    user_request=user_request,
+                    route=recovery_route,
+                    tool_findings=tool_findings,
+                    conversation_context=conversation_context,
+                    draft_answer=draft_answer,
+                    review=review,
+                    revision_number=revision_count,
+                )
+                review = self._review_answer(user_request, draft_answer, tool_findings, conversation_context)
+
+            if review_needs_revision(review):
+                final_answer = self._ask_user_after_failed_review(user_request, route, review)
+            else:
+                final_answer = self._apply_review(draft_answer, review, revision_count)
 
         self._remember(user_request, final_answer)
         return AgentResult(route, tool_findings, draft_answer, review, final_answer, self.memory_summary)
@@ -70,6 +108,66 @@ Context hội thoại:
 
 Yêu cầu mới nhất:
 {user_request}
+
+Trả về JSON với các trường:
+- decision: "clarify" | "plan" | "refuse"
+- reason: chuỗi ngắn bằng tiếng Việt
+- missing_info: danh sách chuỗi bằng tiếng Việt
+- tools_to_use: danh sách có thể gồm check_holiday, check_events, search_restaurants, search_attractions, route_advice, weather_safety, calendar_export
+- safety_issue: chuỗi hoặc null
+"""
+        try:
+            content = self.client.chat(
+                model=self.settings.router_model,
+                messages=[
+                    {"role": "system", "content": self.router_prompt},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            parsed = json.loads(content)
+            return normalize_route(parsed, fallback)
+        except (OpenRouterError, json.JSONDecodeError):
+            return fallback
+
+    def _route_recovery(
+        self,
+        user_request: str,
+        original_route: dict[str, Any],
+        draft_answer: str,
+        review: str,
+        conversation_context: str,
+        revision_number: int,
+    ) -> dict[str, Any]:
+        fallback = local_recovery_route(user_request, original_route, review)
+        if not self.settings.has_api_key:
+            return fallback
+
+        user = f"""
+Bạn đang ở chế độ recover sau khi reviewer đánh dấu câu trả lời chưa đạt.
+
+Context hội thoại:
+{conversation_context}
+
+Yêu cầu mới nhất:
+{user_request}
+
+Route ban đầu:
+{json.dumps(original_route, indent=2, ensure_ascii=False)}
+
+Lượt recover: {revision_number}/{MAX_REVIEW_REVISIONS}
+
+Nhận xét reviewer:
+{review}
+
+Bản nháp chưa đạt:
+{draft_answer}
+
+Hãy quyết định bước tiếp theo:
+- plan: nếu có thể sửa bằng context hiện có và tool cần dùng.
+- clarify: nếu không nên đoán tiếp, cần hỏi người dùng.
+- refuse: nếu reviewer phát hiện unsafe/out-of-scope.
 
 Trả về JSON với các trường:
 - decision: "clarify" | "plan" | "refuse"
@@ -161,11 +259,74 @@ Trả về JSON với các trường:
         except OpenRouterError as exc:
             return f"Reviewer model không khả dụng: {exc}"
 
-    def _apply_review(self, draft_answer: str, review: str) -> str:
+    def _revise_answer(
+        self,
+        user_request: str,
+        route: dict[str, Any],
+        tool_findings: list[dict[str, Any]],
+        conversation_context: str,
+        draft_answer: str,
+        review: str,
+        revision_number: int,
+    ) -> str:
+        if not self.settings.has_api_key:
+            return draft_answer
+
+        try:
+            return self.client.chat(
+                model=self.settings.planner_model,
+                messages=[
+                    {"role": "system", "content": self.travel_prompt},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Reviewer đánh dấu câu trả lời chưa đạt. Hãy sửa bản nháp theo đúng guardrails, "
+                            "không bịa dữ liệu live, không tự động chốt thay người dùng, và chỉ hỏi lại khi cần.\n\n"
+                            f"Lượt sửa: {revision_number}/{MAX_REVIEW_REVISIONS}\n\n"
+                            f"Context hội thoại:\n{conversation_context}\n\n"
+                            f"Yêu cầu mới nhất:\n{user_request}\n\n"
+                            f"Quyết định router:\n{json.dumps(route, indent=2, ensure_ascii=False)}\n\n"
+                            f"Kết quả tool:\n{json.dumps(tool_findings, indent=2, ensure_ascii=False)}\n\n"
+                            f"Nhận xét reviewer:\n{review}\n\n"
+                            f"Bản nháp cần sửa:\n{draft_answer}"
+                        ),
+                    },
+                ],
+                temperature=0.15,
+            )
+        except OpenRouterError:
+            return draft_answer
+
+    def _apply_review(self, draft_answer: str, review: str, revision_count: int = 0) -> str:
+        revision_note = (
+            f"- Đã tự sửa theo reviewer {revision_count} lần trước khi trả lời.\n"
+            if revision_count
+            else "- Không cần vòng tự sửa.\n"
+        )
         return (
             f"{draft_answer.rstrip()}\n\n"
             "## Kiểm Tra Của Reviewer\n"
+            f"{revision_note}"
             f"{review.strip()}\n"
+        )
+
+    def _ask_user_after_failed_review(self, user_request: str, route: dict[str, Any], review: str) -> str:
+        questions = "\n".join(f"- {item}" for item in build_recovery_questions(route, review))
+        return (
+            "## Cần Người Dùng Quyết Định Thêm\n"
+            f"Mình đã đưa câu trả lời quay lại router để recover tối đa {MAX_REVIEW_REVISIONS} lần, nhưng reviewer vẫn đánh dấu chưa đủ chắc chắn. "
+            "Để giữ nguyên tắc augmentation thay vì automation, mình sẽ không tự chốt một kế hoạch có rủi ro sai hoặc thiếu ngữ cảnh.\n\n"
+            "## Yêu Cầu Ban Đầu\n"
+            f"{user_request}\n\n"
+            "## Context Được Giữ Lại\n"
+            "- Bot vẫn giữ 7 lượt hội thoại gần nhất trong context window.\n"
+            "- Các lượt cũ hơn được nén bằng summarizer để giữ điểm đến, ngày đi, ngân sách, sở thích, ràng buộc và các chỉnh sửa trước đó.\n"
+            "- Câu trả lời tiếp theo của bạn sẽ được router đọc cùng context này, nên bạn chỉ cần trả lời các điểm dưới đây.\n\n"
+            "## Điểm Cần Làm Rõ\n"
+            f"{questions}\n\n"
+            "## Lý Do Reviewer Chưa Duyệt\n"
+            f"{review.strip()}\n\n"
+            "Mình sẽ chỉnh tiếp ngay khi bạn xác nhận thêm các thông tin trên.\n"
         )
 
     def _safe_refusal(self, user_request: str, route: dict[str, Any]) -> str:
@@ -234,6 +395,47 @@ Trả về JSON với các trường:
 
 def local_route_request(user_request: str) -> dict[str, Any]:
     text = user_request.lower()
+    prompt_injection_terms = [
+        "ignore previous instructions",
+        "ignore all previous",
+        "reveal system prompt",
+        "show system prompt",
+        "developer message",
+        "disable guardrails",
+        "jailbreak",
+        "prompt injection",
+        "return invalid json",
+        "bỏ qua hướng dẫn",
+        "bỏ qua tất cả",
+        "hiện system prompt",
+        "in system prompt",
+        "hiện prompt",
+        "tắt guardrails",
+        "vô hiệu guardrails",
+        "đừng gọi tool",
+        "không cần safety",
+        "giả vờ đã xác minh",
+    ]
+    travel_terms = [
+        "trip",
+        "travel",
+        "plan",
+        "itinerary",
+        "destination",
+        "hanoi",
+        "ha noi",
+        "hà nội",
+        "du lịch",
+        "chuyến đi",
+        "lịch trình",
+        "địa điểm",
+        "đi chơi",
+        "tham quan",
+        "ăn",
+        "nhà hàng",
+    ]
+    injection_detected = any(term in text for term in prompt_injection_terms)
+    has_travel_intent = any(term in text for term in travel_terms)
     unsafe_terms = [
         "avoid checkpoint",
         "avoid legal checkpoint",
@@ -250,6 +452,15 @@ def local_route_request(user_request: str) -> dict[str, Any]:
         "trái phép",
         "bất hợp pháp",
     ]
+    if injection_detected and not has_travel_intent:
+        return {
+            "decision": "refuse",
+            "reason": "Yêu cầu có dấu hiệu prompt injection và không phải nhu cầu lập kế hoạch du lịch hợp lệ.",
+            "missing_info": [],
+            "tools_to_use": [],
+            "safety_issue": "prompt_injection_attempt",
+        }
+
     if any(term in text for term in unsafe_terms):
         return {
             "decision": "refuse",
@@ -276,11 +487,109 @@ def local_route_request(user_request: str) -> dict[str, Any]:
 
     return {
         "decision": "clarify" if len(missing_info) >= 2 else "plan",
-        "reason": "Dùng router local vì API routing không khả dụng hoặc chưa cần gọi.",
+        "reason": (
+            "Dùng router local; đã bỏ qua phần có dấu hiệu prompt injection và chỉ xử lý nhu cầu du lịch."
+            if injection_detected
+            else "Dùng router local vì API routing không khả dụng hoặc chưa cần gọi."
+        ),
         "missing_info": missing_info,
         "tools_to_use": tools,
-        "safety_issue": None,
+        "safety_issue": "prompt_injection_attempt_ignored" if injection_detected else None,
     }
+
+
+def review_needs_revision(review: str) -> bool:
+    normalized = review.strip().upper()
+    markers = ("NEEDS_REVISION", "NEEDS_USER_CLARIFICATION")
+    return any(normalized.startswith(marker) or marker in normalized[:260] for marker in markers)
+
+
+def local_recovery_route(user_request: str, original_route: dict[str, Any], review: str) -> dict[str, Any]:
+    review_text = review.lower()
+    if any(term in review_text for term in ["unsafe", "illegal", "bất hợp pháp", "không an toàn", "restricted"]):
+        return {
+            "decision": "refuse",
+            "reason": "Reviewer phát hiện rủi ro an toàn/pháp lý nên router recovery chuyển sang từ chối.",
+            "missing_info": [],
+            "tools_to_use": [],
+            "safety_issue": "reviewer_detected_unsafe_content",
+        }
+
+    missing_info = list(original_route.get("missing_info") or [])
+    tools = set(original_route.get("tools_to_use") or [])
+    if any(term in review_text for term in ["event", "sự kiện", "crowd", "đông"]):
+        tools.update(["check_events", "route_advice"])
+    if any(term in review_text for term in ["weather", "thời tiết", "safety", "an toàn"]):
+        tools.add("weather_safety")
+    if any(term in review_text for term in ["restaurant", "nhà hàng", "food", "ăn"]):
+        tools.add("search_restaurants")
+    if any(term in review_text for term in ["attraction", "tham quan", "sightseeing"]):
+        tools.add("search_attractions")
+
+    if tools != set(original_route.get("tools_to_use") or []):
+        return {
+            "decision": "plan",
+            "reason": "Router recovery phát hiện thiếu tool/context có thể tự bổ sung, nên cho planner sửa tiếp.",
+            "missing_info": missing_info,
+            "tools_to_use": sorted(tools),
+            "safety_issue": original_route.get("safety_issue"),
+        }
+
+    if any(term in review_text for term in ["missing context", "thiếu", "clarify", "hỏi lại"]):
+        if not missing_info:
+            missing_info = ["thông tin còn thiếu mà reviewer yêu cầu làm rõ"]
+        return {
+            "decision": "clarify",
+            "reason": "Reviewer cho rằng thiếu ngữ cảnh quan trọng; không nên tự đoán tiếp.",
+            "missing_info": missing_info,
+            "tools_to_use": list(original_route.get("tools_to_use") or []),
+            "safety_issue": original_route.get("safety_issue"),
+        }
+
+    return {
+        "decision": "plan",
+        "reason": "Router recovery cho phép planner sửa bằng context hiện có và bổ sung tool liên quan.",
+        "missing_info": missing_info,
+        "tools_to_use": sorted(tools),
+        "safety_issue": original_route.get("safety_issue"),
+    }
+
+
+def build_recovery_questions(route: dict[str, Any], review: str) -> list[str]:
+    missing = [str(item) for item in route.get("missing_info") or []]
+    if missing:
+        return [f"Bạn có thể xác nhận {item} không?" for item in missing[:3]]
+
+    review_text = review.lower()
+    if any(term in review_text for term in ["weather", "thời tiết", "mưa", "nắng", "storm"]):
+        return [
+            "Bạn có muốn ưu tiên phương án indoor nếu thời tiết xấu không?",
+            "Có ai trong nhóm nhạy cảm với nắng nóng, mưa, hoặc cần hạn chế đi bộ không?",
+        ]
+    if any(term in review_text for term in ["budget", "ngân sách", "chi phí", "giá"]):
+        return [
+            "Ngân sách tối đa cho mỗi người hoặc cả nhóm là khoảng bao nhiêu?",
+            "Bạn muốn ưu tiên tiết kiệm chi phí hay giữ trải nghiệm thoải mái hơn?",
+        ]
+    if any(term in review_text for term in ["overload", "quá tải", "too many", "dày"]):
+        return [
+            "Bạn muốn giữ những điểm nào là bắt buộc trong lịch trình?",
+            "Bạn chấp nhận bỏ bớt hoạt động hay kéo dài sang ngày khác?",
+        ]
+    if any(term in review_text for term in ["route", "traffic", "đường", "di chuyển", "tắc"]):
+        return [
+            "Bạn muốn đi bằng phương tiện nào và có giới hạn thời gian di chuyển không?",
+            "Bạn muốn tránh khu đông/tắc hay ưu tiên đi đủ điểm hơn?",
+        ]
+    if any(term in review_text for term in ["event", "crowd", "sự kiện", "đông"]):
+        return [
+            "Bạn có muốn tránh hoàn toàn khu vực có sự kiện/đông người không?",
+            "Bạn có thể đi sớm hơn hoặc đổi thứ tự điểm đến để giảm rủi ro đông không?",
+        ]
+    return [
+        "Bạn muốn ưu tiên điều gì nhất: tiết kiệm chi phí, ít di chuyển, nhiều trải nghiệm, hay an toàn/nhẹ nhàng?",
+        "Có ràng buộc nào bắt buộc không, ví dụ giờ về, trẻ em/người lớn tuổi, ăn kiêng, hoặc phương tiện?",
+    ]
 
 
 def normalize_route(parsed: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
@@ -333,7 +642,8 @@ def local_demo_answer(
         "## Câu Hỏi Theo Dõi\n"
         f"{questions}\n\n"
         "## Đề Xuất Tinh Chỉnh\n"
-        "Bạn có thể tiếp tục nhắn trong cùng cuộc hội thoại; chatbot sẽ dùng 7 lượt gần nhất và tóm tắt các lượt cũ hơn."
+        "Bạn có thể tiếp tục nhắn trong cùng cuộc hội thoại; chatbot sẽ dùng 7 lượt gần nhất và tóm tắt các lượt cũ hơn.\n\n"
+        f"{friendly_closing(user_request, is_final_plan=not missing)}"
     )
 
 
@@ -349,3 +659,15 @@ def compact_text(text: str, limit: int) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: limit - 3] + "..."
+
+
+def friendly_closing(user_request: str, is_final_plan: bool = True) -> str:
+    if not is_final_plan:
+        return "Mình sẽ chỉnh tiếp ngay khi bạn xác nhận thêm các thông tin trên."
+
+    text = user_request.lower()
+    if any(term in text for term in ["gia đình", "cả nhà", "family", "bé", "con"]):
+        return "Chúc cả nhà có chuyến đi vui vẻ và nhẹ nhàng!"
+    if any(term in text for term in ["nhóm bạn", "bạn bè", "friends", "mọi người"]):
+        return "Chúc mọi người đi chơi vui vẻ!"
+    return "Chúc bạn có chuyến đi vui vẻ!"

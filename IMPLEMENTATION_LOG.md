@@ -35,17 +35,20 @@ The app uses OpenRouter and separates work across three model roles:
 - `REVIEWER_MODEL`: checks the answer for safety, hallucination risk, missing context, output structure, and practical feasibility.
 - `SUMMARY_MODEL`: summarizes older conversation turns when the context window exceeds 7 turns.
 
-All model roles default to:
+Reviewer recovery loop:
 
-```text
-google/gemini-2.5-flash
-```
+- If reviewer returns `NEEDS_REVISION`, the answer is sent back to router recovery.
+- Router recovery decides whether to `plan`, `clarify`, or `refuse`.
+- If router recovery chooses `plan`, planner revises with the recovery route and refreshed tool list.
+- The agent allows at most 2 recovery attempts.
+- If the answer still does not pass after 2 attempts, the bot asks the user targeted clarification questions instead of pretending the plan is reliable.
 
-The summarizer model defaults to:
+Default model split:
 
-```text
-deepseek/deepseek-chat-v3-0324
-```
+- `ROUTER_MODEL`: `google/gemini-2.5-flash`
+- `PLANNER_MODEL`: `deepseek/deepseek-v4-flash`
+- `REVIEWER_MODEL`: `google/gemini-2.5-flash`
+- `SUMMARY_MODEL`: `deepseek/deepseek-v4-flash`
 
 ## Environment Variables
 
@@ -57,9 +60,9 @@ Required:
 OPENROUTER_API_KEY=your_key_here
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1/chat/completions
 ROUTER_MODEL=google/gemini-2.5-flash
-PLANNER_MODEL=google/gemini-2.5-flash
+PLANNER_MODEL=deepseek/deepseek-v4-flash
 REVIEWER_MODEL=google/gemini-2.5-flash
-SUMMARY_MODEL=deepseek/deepseek-chat-v3-0324
+SUMMARY_MODEL=deepseek/deepseek-v4-flash
 CONVERSATION_WINDOW=7
 ```
 
@@ -113,6 +116,7 @@ The main prompt includes:
 - Persona.
 - Stable low-variance behavior.
 - Guardrails.
+- Router-level prompt-injection guardrails.
 - Missing-information policy.
 - Tool-use placeholders.
 - Recommendation logic by scenario.
@@ -127,6 +131,15 @@ Latest prompt-structure update:
   output contract, and quality checklist.
 - Reorganized the reviewer prompt into safety, grounding, context, tool-use,
   practicality, and output-format checks.
+- Added router rules to ignore prompt-injection attempts such as requests to
+  reveal hidden prompts, disable guardrails, fake tool verification, or change
+  the required JSON schema.
+- Added router recovery rules for reviewer failures: missing context, unsafe
+  content, overloaded itinerary, budget realism, weather/safety gaps, and
+  event/crowd/route uncertainty.
+- Added friendly closing rules: family, friend group, and solo traveler plans
+  end with a natural Vietnamese sign-off; clarification/refusal responses avoid
+  sounding like the trip has already been finalized.
 - Attempted to inspect `1-day04-prompt-engineering-tool-calling-v2.pdf`; local
   extraction tools could identify the file and page count, but the PDF text was
   not extractable in this environment, likely due encoded/image-heavy slides.
@@ -246,5 +259,5 @@ Expected:
 - Tools are simulated, not live APIs.
 - The chatbot keeps 7 recent turns and summarizes older turns.
 - Missing OpenRouter key triggers local pseudo responses.
-- Reviewer cannot revise the plan automatically yet; it appends a review check.
+- Reviewer can trigger up to 2 planner revisions before the bot asks the user for more context.
 - No persistent memory or correction log yet.

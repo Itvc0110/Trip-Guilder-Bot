@@ -18,6 +18,7 @@ It includes:
 - A Markdown instruction prompt in `prompts/travel_agent_prompt.md`.
 - A summarizer prompt in `prompts/summarizer_prompt.md`.
 - A reviewer prompt in `prompts/reviewer_prompt.md`.
+- A router prompt in `prompts/router_prompt.md` with prompt-injection guardrails.
 - Simulated demo tool modules in `tools/`.
 - `.env.example` for required and future API keys.
 
@@ -45,9 +46,9 @@ Create or update `.env`:
 OPENROUTER_API_KEY=your_key_here
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1/chat/completions
 ROUTER_MODEL=google/gemini-2.5-flash
-PLANNER_MODEL=google/gemini-2.5-flash
+PLANNER_MODEL=deepseek/deepseek-v4-flash
 REVIEWER_MODEL=google/gemini-2.5-flash
-SUMMARY_MODEL=deepseek/deepseek-chat-v3-0324
+SUMMARY_MODEL=deepseek/deepseek-v4-flash
 CONVERSATION_WINDOW=7
 ```
 
@@ -122,11 +123,17 @@ The agent uses three model roles:
 - `REVIEWER_MODEL`: checks guardrails, uncertainty, hallucination risk, missing context, budget realism, and output structure.
 - `SUMMARY_MODEL`: summarizes older conversation turns once the context window exceeds 7 turns.
 
-All roles default to:
+If the reviewer returns `NEEDS_REVISION`, the answer is sent back to the router
+for recovery. The router decides whether to revise, ask for clarification, or
+refuse. The system allows up to 2 recovery attempts. If it still fails, the bot
+asks the user targeted questions instead of auto-finalizing a risky plan.
 
-```text
-google/gemini-2.5-flash
-```
+Default role split:
+
+- `ROUTER_MODEL`: `google/gemini-2.5-flash`
+- `PLANNER_MODEL`: `deepseek/deepseek-v4-flash`
+- `REVIEWER_MODEL`: `google/gemini-2.5-flash`
+- `SUMMARY_MODEL`: `deepseek/deepseek-v4-flash`
 
 ## Tools
 

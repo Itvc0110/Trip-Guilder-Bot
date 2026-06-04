@@ -14,8 +14,12 @@ import json
 from math import radians, cos, sin, asin, sqrt
 from typing import Any
 
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+try:
+    from geopy.geocoders import Nominatim
+    from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+except ImportError:
+    Nominatim = None
+    GeocoderTimedOut = GeocoderUnavailable = Exception
 
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -31,6 +35,9 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def geocode_places(places: list[str]) -> list[dict]:
     """Geocoding: chuyển tên địa điểm thành tọa độ."""
+    if Nominatim is None:
+        return []
+
     geolocator = Nominatim(user_agent="trip_guilder_bot")
     geocoded = []
 
@@ -169,6 +176,14 @@ def route_advice(user_request: str, openrouter_client: Any = None, settings: Any
     Output: JSON optimized route + itinerary cho map visualization
     """
     try:
+        if Nominatim is None:
+            return {
+                "tool_name": "route_advice",
+                "status": "unavailable",
+                "summary": "Chưa cài geopy nên route_advice chưa thể geocode/tối ưu tuyến thật trong môi trường này.",
+                "verified": False,
+            }
+
         # Parse input - có thể là JSON array hoặc string chứa danh sách địa điểm
         import re
         places = []
