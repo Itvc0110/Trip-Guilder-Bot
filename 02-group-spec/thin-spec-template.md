@@ -1,39 +1,41 @@
-# Template — Thin SPEC Cuối Day 05
+# Thin SPEC — Trip-Guilder-Bot (AI Weekend Planner)
 
-Thin SPEC không phải PRD đầy đủ. Đây là bản cam kết đủ rõ để sáng Day 06 nhóm build ngay.
+Thin SPEC này là bản cam kết thiết kế chi tiết để hiện thực hóa MVP của Trip-Guilder-Bot.
 
 ## 1. Track, product/app và user
 
 **Track:** AI for Travel & Hospitality  
 **Product/app thật:** Google Search (AI Overview) – dùng để lên kế hoạch đi chơi  
-**User cụ thể:** Phụ huynh có con nhỏ (3–10 tuổi) hoặc nhóm bạn trẻ, đang lên kế hoạch cho một chuyến đi chơi cuối tuần tại Hà Nội.  
+**User cụ thể:** Các cặp đôi tại Hà Nội (đang hẹn hò hoặc đã kết hôn, không dắt theo con nhỏ) đang lên kế hoạch cho một buổi đi chơi/hẹn hò cuối tuần.  
 **Nhóm có phải user thật không? Nếu không, khác ở đâu?**  
-Có. Các thành viên trong nhóm đều từng tự lên kế hoạch đi chơi cuối tuần cho gia đình/bạn bè và gặp khó khăn với việc tổng hợp thông tin từ nhiều nguồn.
+Có. Các thành viên trong nhóm đều từng tự lên kế hoạch hẹn hò hoặc đi chơi cuối tuần cùng người yêu/bạn đời tại Hà Nội và gặp khó khăn trong việc tìm địa điểm lãng mạn, mới lạ hoặc tránh những nơi quá đông đúc.
 
 ## 2. Evidence summary
 
 | Evidence | Nguồn | User/pain nói lên điều gì? | SPEC phải đổi gì? |
 |----------|-------|----------------------------|--------------------|
-| Google AI Overview trả về đoạn văn bản lịch trình rất ngắn (chỉ buổi sáng), không Maps, không Calendar, không hỏi lại sở thích. | Self-use (screenshot `google-ai-overview-han-che.png`) | User chỉ nhận được gợi ý dạng text, không thể dùng ngay, phải tự tra Maps và nhập Calendar thủ công. | Tích hợp Maps và nút xuất Calendar. Thêm cơ chế hỏi lại để thu thập sở thích, độ tuổi, phương tiện. |
-| *“Google đã tung thêm tính năng AI cho Search, Maps và Gemini… người dùng chuyển sang ChatGPT để lên kế hoạch chuyến đi.”* | TechCrunch (2025) | Search truyền thống không đáp ứng; người dùng cần công cụ tạo itinerary có thể chia sẻ, chỉnh sửa. | Tập trung vào khả năng chỉnh sửa, xuất lịch và cộng tác (chia sẻ để backlog). |
-| *“ChatGPT tốt cho brainstorming nhưng không tạo itinerary có thể chia sẻ và chỉnh sửa cộng tác.”* | Stippl | AI text thuần chưa đủ; cần tích hợp dữ liệu thực tế và công cụ cộng tác. | Cho phép user chỉnh sửa itinerary trực tiếp (kéo thả hoặc sửa text) và lưu thay đổi. |
+| Google AI Overview trả về đoạn văn bản lịch trình rất ngắn (chỉ buổi sáng), không Maps, không Calendar, không hỏi lại sở thích. | Self-use (screenshot `google-ai-overview-han-che.png`) | User chỉ nhận được gợi ý dạng text tĩnh, không thể dùng ngay cho buổi hẹn hò, phải tự tra Maps và nhập Calendar thủ công. | Tích hợp Maps và nút xuất Calendar. Thêm cơ chế hỏi lại để thu thập sở thích, vibe buổi hẹn hò (lãng mạn, ấm cúng, phiêu lưu). |
+| *“Google đã tung thêm tính năng AI cho Search, Maps và Gemini… người dùng chuyển sang ChatGPT để lên kế hoạch chuyến đi.”* | TechCrunch (2025) | Search truyền thống không đáp ứng; cặp đôi cần công cụ tạo itinerary hẹn hò có thể chia sẻ, chỉnh sửa và tối ưu hóa thời gian di chuyển. | Tập trung vào khả năng chỉnh sửa lịch trình trực quan, đề xuất tuyến đường và hiển thị bản đồ trực tiếp. |
+| *“ChatGPT tốt cho brainstorming nhưng không tạo itinerary có thể chia sẻ và chỉnh sửa cộng tác.”* | Stippl | AI sinh text thuần chưa đủ; cần tích hợp dữ liệu thực tế (địa điểm thực) và các công cụ xuất lịch. | Cho phép user chỉnh sửa itinerary trực tiếp, tích hợp cơ chế check số lượng người lập kế hoạch đi để tránh các điểm quá tải. |
 
 ## 3. Pain statement
 
 ```text
-User (phụ huynh hoặc nhóm bạn) đang lên kế hoạch đi chơi cuối tuần tại Hà Nội,
-vì Google AI Overview chỉ trả về gợi ý dạng text tĩnh, không có bản đồ, không thể thêm vào lịch, không hỏi lại sở thích,
-dẫn tới người dùng phải tự tra cứu Maps, tự nhập Calendar, mất thời gian và dễ bỏ sót.
-Bằng chứng chính là ảnh chụp màn hình Google AI Overview với lịch trình chỉ vỏn vẹn vài dòng, thiếu các nút tương tác.
+User (cặp đôi tại Hà Nội) đang lên kế hoạch hẹn hò/đi chơi cuối tuần,
+vì Google AI Overview chỉ trả về gợi ý dạng text tĩnh, không có bản đồ, không thể thêm vào lịch, không hiển thị lượng người để tránh nơi quá đông,
+dẫn tới người dùng phải tự tra cứu Maps, tự liên hệ kiểm tra hoặc lo lắng về việc chen chúc, mất đi không khí lãng mạn riêng tư.
+Bằng chứng chính là ảnh chụp màn hình Google AI Overview với lịch trình sơ sài, thiếu các công cụ tương tác thực tế cho cặp đôi.
 ```
 
-## 4. Build slice
+## 4. Build Slice (MVP Scope)
 
 ```text
-Cho phụ huynh hoặc nhóm bạn đang lên kế hoạch đi chơi cuối tuần nhưng chỉ nhận được gợi ý dạng text từ Google AI Overview,
-prototype sẽ dùng AI để hỏi về sở thích, thời gian, phạm vi, phương tiện, độ tuổi,
-tạo ra lịch trình theo khung giờ, hiển thị trên Google Maps (mock/iframe), kèm nút "Thêm vào Google Calendar" (mock),
-và xử lý failure mode "AI không đủ thông tin để tạo lịch" bằng cách hỏi lại các câu cụ thể (sở thích, độ tuổi, phương tiện) và đưa ra các lựa chọn gợi ý.
+Cho các cặp đôi ở Hà Nội đang lên kế hoạch hẹn hò cuối tuần nhưng chỉ nhận được gợi ý dạng text từ Google AI Overview,
+prototype sẽ sử dụng ReAct Agent (DeepSeek-v4-flash) với 4 công cụ (New Experience, Favourable Place, Current Trend, Map & Export) để:
+1. Nhận yêu cầu và hỏi lại nếu thiếu thông tin (vibe hẹn hò, ngân sách, phương tiện).
+2. Tạo lịch trình chi tiết theo khung giờ, hiển thị lượng người dự kiến lập kế hoạch đi cùng thời điểm để tránh quá tải (crowd avoidance).
+3. Hiển thị các địa điểm hẹn hò trên bản đồ (Leaflet JS/iframe Google Maps).
+4. Cho phép kéo thả chỉnh sửa thứ tự hoặc thay thế địa điểm, xuất lịch sang Google Calendar (.ics) và ghi nhận log chỉnh sửa.
 ```
 
 ## 5. Auto/Aug decision
@@ -45,7 +47,7 @@ Chọn một:
 - [ ] **Automation:** AI tự quyết và tự hành động.
 
 **Lý do chọn:**  
-AI không nên tự động quyết định lịch đi chơi vì sở thích gia đình là ngữ cảnh cá nhân, có rủi ro về thời gian, sức khỏe trẻ nhỏ. User phải giữ quyền kiểm soát và chỉnh sửa.
+Buổi hẹn hò của cặp đôi mang tính cá nhân hóa cực kỳ cao, phụ thuộc vào tâm trạng, thời tiết và không gian (vibe). AI không nên tự động đặt chỗ hay chốt lịch cứng nhắc. User cần giữ vai trò duyệt, tinh chỉnh và quyết định cuối cùng.
 
 **Human role:** reviewer, decider, rescuer, trainer
 
@@ -53,18 +55,19 @@ AI không nên tự động quyết định lịch đi chơi vì sở thích gia
 
 | Path | Prototype phải thể hiện gì? |
 |------|------------------------------|
-| Happy | User nhập đầy đủ thông tin (sở thích: công viên, thời gian: 9h-17h, phạm vi: Hà Nội, có trẻ 7 tuổi, ô tô). AI trả lịch trình 3-4 điểm kèm khung giờ, hiển thị bản đồ (mock), nút "Thêm vào Calendar". |
-| Low‑confidence | User trả lời mơ hồ ("đi đâu cũng được", "thích gì cũng được"). AI hỏi lại: "Bạn thích hoạt động ngoài trời, trong nhà, hay vui chơi giải trí?" và đưa ra 3 lựa chọn để chọn. |
-| Failure | AI không tìm thấy địa điểm phù hợp với sở thích (ví dụ: "công viên có chim hoàng yến"). AI thông báo: "Rất tiếc, chưa có địa điểm phù hợp. Bạn có muốn thử sở thích khác hoặc mở rộng phạm vi không?" và hiển thị gợi ý dự phòng (công viên Thống Nhất, hồ Tây, Vườn bách thú). |
-| Correction | User kéo thả thứ tự địa điểm (muốn đi bảo tàng trước, công viên sau) hoặc sửa thời gian. AI tự động cập nhật lịch trình, hiển thị lại khung giờ mới và cho phép xuất Calendar. Mỗi lần chỉnh sửa được ghi log (console log) để cải thiện gợi ý sau. |
+| Happy | User nhập đầy đủ thông tin (vibe: lãng mạn riêng tư, thời gian: chiều-tối thứ 7, phương tiện: xe máy). AI Agent dùng các công cụ lọc từ seed database (kết hợp API) trả về lịch trình 3 điểm (cafe view hồ, ăn tối steakhouse, dạo phố cổ) kèm giờ giấc, hiển thị số người dự kiến để tránh quá tải, hiển thị bản đồ, nút "Thêm vào Calendar". |
+| Low‑confidence | User trả lời mơ hồ ("đi đâu cũng được", "gợi ý gì cũng được"). AI phát hiện mơ hồ và hiển thị Clarification UI với 3 nút lựa chọn vibe hẹn hò: *(1) Lãng mạn & Riêng tư, (2) Năng động & Trải nghiệm mới, (3) Ẩm thực & Phố xá*. |
+| Failure | User nhập yêu cầu quá dị biệt không có trong DB hoặc API (ví dụ: "nhà hàng phục vụ thịt chim cánh cụt ở Hà Nội"). AI thông báo lịch sự không tìm thấy và kích hoạt fallback: gợi ý 3 địa điểm hẹn hò lãng mạn phổ biến nhất (Hồ Tây, Cầu Long Biên, Cafe Yên) kèm câu hỏi "Bạn có muốn thử các địa điểm hẹn hò được ưa thích này không?". |
+| Correction | User kéo thả đổi thứ tự (muốn ăn tối trước rồi đi cafe sau) hoặc bấm nút xóa/thay thế địa điểm. AI tự động cập nhật lại thời gian di chuyển, khung giờ trên timeline, cập nhật bản đồ, và in log sự kiện dạng JSON ra Console của trình duyệt để học hỏi hành vi. |
 
 ## 7. Failure mode nguy hiểm nhất
 
 ```text
-Nếu user chọn một sở thích quá đặc biệt (ví dụ: "muốn xem chim hoàng yến trong công viên") và AI không tìm thấy bất kỳ địa điểm nào phù hợp trong cơ sở dữ liệu mock,
-AI có thể trả lời "Không tìm thấy" và dừng lại, khiến user bế tắc,
-hậu quả là user mất niềm tin và bỏ cuộc.
-Prototype sẽ xử lý bằng fallback: hiển thị 3 gợi ý phổ biến nhất cho sở thích gần nhất (ví dụ: "hoạt động ngoài trời" → gợi ý công viên Thống Nhất, hồ Tây, Vườn bách thú) và hỏi "Bạn có muốn thử các địa điểm này không?"
+Nếu user yêu cầu một không gian hẹn hò cụ thể nhưng địa điểm đó đã đóng cửa hoặc quá tải nghiêm trọng, dẫn đến buổi hẹn hò bị hỏng và cặp đôi thất vọng.
+Prototype sẽ xử lý bằng cách:
+1. Sử dụng live API để kiểm tra trạng thái hoạt động thực tế.
+2. Hiển thị "lượng người dự kiến check-in" dựa trên số lượng người dùng đang lập kế hoạch đến địa điểm đó trong ngày qua hệ thống.
+3. Nếu một địa điểm bị đánh dấu quá tải hoặc đóng cửa, Agent tự động đề xuất một địa điểm thay thế tương đương (cùng vibe, cùng khu vực) ngay lập tức.
 Owner kiểm thử path này là Đinh Nhật Thành.
 ```
 
@@ -78,4 +81,3 @@ Owner kiểm thử path này là Đinh Nhật Thành.
 | Lưu Thiện Việt Cường | Hỗ trợ prototype / tích hợp Maps & Calendar mock | Code phần hiển thị địa điểm trên iframe Maps, tạo mock link Calendar |
 | Đinh Nhật Thành | Test / failure path (chạy code test) | Prompt test, ảnh chụp happy path và failure path, log correction, đảm bảo các path hoạt động |
 | Phạm Trung Hiếu | Demo script + repo | File demo-slides.pdf, repo GitHub public, chuẩn bị narrative demo, quản lý nhóm |
-
