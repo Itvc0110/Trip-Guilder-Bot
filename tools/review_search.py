@@ -181,12 +181,40 @@ def get_reviews_for_places(places: list[dict[str, Any]], max_best_per_place: int
     return results
 
 
+def search_reviews(place_result: dict[str, Any] | str) -> dict[str, Any]:
+    """Đọc review của một địa điểm, ưu tiên data_id từ search_places.
+
+    Parameters
+    ----------
+    place_result:
+        Địa điểm dưới dạng dict (có data_id) hoặc chuỗi data_id.
+
+    Returns
+    -------
+    dict
+        Kết quả review tương ứng.
+    """
+    if isinstance(place_result, dict):
+        data_id = place_result.get("data_id")
+        if not data_id:
+            return _error_result("Không tìm thấy data_id trong thông tin địa điểm.", data_id=None)
+    else:
+        data_id = str(place_result)
+
+    result = get_place_reviews(data_id)
+    # Cập nhật tên tool trong kết quả trả về để khớp với registry/active tool list
+    result["tool_name"] = "search_reviews"
+    return result
+
+
 def _normalize_review(review: dict[str, Any]) -> dict[str, Any]:
+    snippet = review.get("snippet") or review.get("text") or ""
     return {
         "user": review.get("user", {}).get("name") if isinstance(review.get("user"), dict) else review.get("username"),
         "rating": review.get("rating"),
         "date": review.get("date") or review.get("iso_date"),
-        "snippet": review.get("snippet") or review.get("text"),
+        "snippet": snippet,
+        "text": snippet,  # Thêm trường này để tương thích với filter_reviews.py
         "likes": review.get("likes"),
         "source": review.get("source"),
     }
@@ -194,7 +222,7 @@ def _normalize_review(review: dict[str, Any]) -> dict[str, Any]:
 
 def _error_result(message: str, data_id: str | None = None) -> dict[str, Any]:
     return {
-        "tool_name": "get_place_reviews",
+        "tool_name": "search_reviews",
         "status": "error",
         "summary": message,
         "data_id": data_id,
