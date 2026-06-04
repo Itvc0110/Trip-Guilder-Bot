@@ -10,7 +10,8 @@ Workflow điển hình
 
 Input:
 - data_id    : str   — lấy từ trường ``data_id`` trong kết quả search_places
-- max_reviews: int   — số review tối đa muốn lấy (mặc định 5)
+- max_best : int   — số review tốt nhất (ratingHigh) tối đa muốn lấy (mặc định 5)
+- max_worst: int   — số review tệ nhất (ratingLow) tối đa muốn lấy (mặc định 5)
 
 Tool dùng SerpAPI Google Maps Reviews engine nếu có ``SERPAPI_API_KEY``.
 Nếu chưa có key hoặc API lỗi, trả kết quả có cấu trúc và nói rõ trạng thái.
@@ -25,7 +26,8 @@ import requests
 
 
 SERPAPI_URL = "https://serpapi.com/search"
-DEFAULT_MAX_REVIEWS = 5
+DEFAULT_MAX_BEST = 5
+DEFAULT_MAX_WORST = 5
 
 
 TOOL_DEFINITION = {
@@ -45,9 +47,13 @@ TOOL_DEFINITION = {
                     "Dạng chuỗi hex, ví dụ: '0x3135ab12:0x4a2bcd'."
                 ),
             },
-            "max_reviews": {
+            "max_best": {
                 "type": "integer",
-                "description": "Số review tối đa muốn lấy. Mặc định là 5.",
+                "description": "Số review tốt nhất (rating cao nhất) tối đa muốn lấy. Mặc định là 5.",
+            },
+            "max_worst": {
+                "type": "integer",
+                "description": "Số review tệ nhất (rating thấp nhất) tối đa muốn lấy. Mặc định là 5.",
             },
         },
         "required": ["data_id"],
@@ -57,7 +63,8 @@ TOOL_DEFINITION = {
 
 def get_place_reviews(
     data_id: str,
-    max_reviews: int = DEFAULT_MAX_REVIEWS,
+    max_best: int = DEFAULT_MAX_BEST,
+    max_worst: int = DEFAULT_MAX_WORST,
 ) -> dict[str, Any]:
     """Lấy review của một địa điểm Google Maps theo data_id.
 
@@ -66,8 +73,10 @@ def get_place_reviews(
     data_id:
         Google Maps data_id của địa điểm.
         Lấy từ trường ``data_id`` trong kết quả :func:`search_places`.
-    max_reviews:
-        Số lượng review tối đa muốn trả về. Mặc định 5.
+    max_best:
+        Số lượng review tốt nhất tối đa muốn trả về. Mặc định 5.
+    max_worst:
+        Số lượng review tệ nhất tối đa muốn trả về. Mặc định 5.
 
     Returns
     -------
@@ -90,37 +99,49 @@ def get_place_reviews(
             "verified": False,
         }
 
-    try:
-        response = requests.get(
-            SERPAPI_URL,
-            params={
-                "engine": "google_maps_reviews",
-                "data_id": data_id,
-                "hl": "vi",
-                "api_key": api_key,
-            },
-            timeout=15,
-        )
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        return _error_result(
-            f"Lỗi khi gọi SerpAPI Google Maps Reviews: {exc}", data_id
-        )
+    reviews = []
+    place_name = data_id
+    
+    def fetch_reviews(sort_by: str, max_count: int):
+        if max_count <= 0:
+            return
+        try:
+            response = requests.get(
+                SERPAPI_URL,
+                params={
+                    "engine": "google_maps_reviews",
+                    "data_id": data_id,
+                    "hl": "vi",
+                    "api_key": api_key,
+                    "sort_by": sort_by
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get("error"):
+                return
+            
+            nonlocal place_name
+            place_info = data.get("place_info") or {}
+            if place_info.get("title"):
+                place_name = place_info.get("title")
 
-    data = response.json()
-    if data.get("error"):
-        return _error_result(str(data["error"]), data_id)
+            raw_reviews = data.get("reviews") or []
+            for r in raw_reviews[:max_count]:
+                norm = _normalize_review(r)
+                norm["sort_by"] = sort_by
+                reviews.append(norm)
+        except Exception:
+            pass
 
-    raw_reviews = data.get("reviews") or []
-    reviews = [_normalize_review(r) for r in raw_reviews[:max_reviews]]
-
-    place_info = data.get("place_info") or {}
-    place_name = place_info.get("title") or data_id
+    fetch_reviews("ratingHigh", max_best)
+    fetch_reviews("ratingLow", max_worst)
 
     return {
         "tool_name": "get_place_reviews",
         "status": "success",
-        "summary": f"Lấy được {len(reviews)} review cho địa điểm: {place_name}",
+        "summary": f"Lấy được {len(reviews)} review ({max_best} tốt, {max_worst} tệ) cho địa điểm: {place_name}",
         "data_id": data_id,
         "place_name": place_name,
         "reviews": reviews,
@@ -128,7 +149,7 @@ def get_place_reviews(
     }
 
 
-def get_reviews_for_places(places: list[dict[str, Any]], max_reviews_per_place: int = 3) -> list[dict[str, Any]]:
+def get_reviews_for_places(places: list[dict[str, Any]], max_best_per_place: int = 2, max_worst_per_place: int = 1) -> list[dict[str, Any]]:
     """Lấy review cho nhiều địa điểm từ kết quả search_places.
 
     Đây là hàm tiện ích để kết nối trực tiếp output của search_places
@@ -138,8 +159,10 @@ def get_reviews_for_places(places: list[dict[str, Any]], max_reviews_per_place: 
     ----------
     places:
         Danh sách địa điểm, lấy từ trường ``places`` trong kết quả search_places.
-    max_reviews_per_place:
-        Số review tối đa lấy cho mỗi địa điểm. Mặc định 3.
+    max_best_per_place:
+        Số review tốt nhất lấy cho mỗi địa điểm. Mặc định 2.
+    max_worst_per_place:
+        Số review tệ nhất lấy cho mỗi địa điểm. Mặc định 1.
 
     Returns
     -------
@@ -151,7 +174,7 @@ def get_reviews_for_places(places: list[dict[str, Any]], max_reviews_per_place: 
         data_id = place.get("data_id")
         if not data_id:
             continue
-        result = get_place_reviews(data_id, max_reviews=max_reviews_per_place)
+        result = get_place_reviews(data_id, max_best=max_best_per_place, max_worst=max_worst_per_place)
         result["place_title"] = place.get("title")
         result["place_address"] = place.get("address")
         results.append(result)
